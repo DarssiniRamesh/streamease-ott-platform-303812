@@ -84,15 +84,18 @@ class ContentDetailsScreen extends StatelessWidget {
                           Expanded(
                             child: FilledButton.icon(
                               onPressed: () {
-                                // Capture providers synchronously; no context usage after awaits.
+                                // Capture everything that touches BuildContext BEFORE any async work.
                                 final HomeController home = context.read<HomeController>();
+                                final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
 
+                                // Async work does NOT use BuildContext after awaits.
                                 () async {
-                                  await c.playPressed();
-                                  await home.onPlaybackProgressPersisted();
+                                  await c.playPressed(); // write-through to AppDatabase via repository
+                                  await home.onPlaybackProgressPersisted(); // refresh Continue Watching
                                 }();
 
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                // Show immediate UI feedback synchronously.
+                                messenger.showSnackBar(
                                   const SnackBar(content: Text('Playback not implemented yet.')),
                                 );
                               },

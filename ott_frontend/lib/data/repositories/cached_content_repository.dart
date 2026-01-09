@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:ott_frontend/core/services/simple_cache.dart';
+import 'package:ott_frontend/core/services/test_config.dart';
 import 'package:ott_frontend/data/models/content_models.dart';
 import 'package:ott_frontend/data/repositories/content_repository.dart';
 import 'package:ott_frontend/persistence/app_database.dart';
@@ -61,14 +62,18 @@ class CachedContentRepository implements ContentRepository {
     final CacheEntry? fresh = cache.getJsonIfFresh(_homeKey, homeTtl);
     if (fresh != null) {
       // SWR: return immediately and refresh in background.
-      unawaited(_refreshHomeFeed());
+      if (!TestConfig.disableAutoStart) {
+        unawaited(_refreshHomeFeed());
+      }
       return HomeFeedPayload.fromJson(jsonDecode(fresh.json) as Map<String, dynamic>);
     }
 
     final CacheEntry? stale = cache.getJsonEvenIfStale(_homeKey);
     if (stale != null) {
       // Stale fallback + background refresh.
-      unawaited(_refreshHomeFeed());
+      if (!TestConfig.disableAutoStart) {
+        unawaited(_refreshHomeFeed());
+      }
       return HomeFeedPayload.fromJson(jsonDecode(stale.json) as Map<String, dynamic>);
     }
 
@@ -95,13 +100,17 @@ class CachedContentRepository implements ContentRepository {
 
     final CacheEntry? fresh = cache.getJsonIfFresh(key, detailsTtl);
     if (fresh != null) {
-      unawaited(_refreshDetails(id: id));
+      if (!TestConfig.disableAutoStart) {
+        unawaited(_refreshDetails(id: id));
+      }
       return ContentItem.fromJson(jsonDecode(fresh.json) as Map<String, dynamic>);
     }
 
     final CacheEntry? stale = cache.getJsonEvenIfStale(key);
     if (stale != null) {
-      unawaited(_refreshDetails(id: id));
+      if (!TestConfig.disableAutoStart) {
+        unawaited(_refreshDetails(id: id));
+      }
       return ContentItem.fromJson(jsonDecode(stale.json) as Map<String, dynamic>);
     }
 
@@ -134,13 +143,17 @@ class CachedContentRepository implements ContentRepository {
     final String key = _searchKey(q);
     final CacheEntry? fresh = cache.getJsonIfFresh(key, searchTtl);
     if (fresh != null) {
-      unawaited(_refreshSearch(query: q));
+      if (!TestConfig.disableAutoStart) {
+        unawaited(_refreshSearch(query: q));
+      }
       return _decodeSearchResults(fresh.json);
     }
 
     final CacheEntry? stale = cache.getJsonEvenIfStale(key);
     if (stale != null) {
-      unawaited(_refreshSearch(query: q));
+      if (!TestConfig.disableAutoStart) {
+        unawaited(_refreshSearch(query: q));
+      }
       return _decodeSearchResults(stale.json);
     }
 

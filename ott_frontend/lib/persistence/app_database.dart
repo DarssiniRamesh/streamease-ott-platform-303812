@@ -1,3 +1,4 @@
+import 'package:ott_frontend/core/services/test_config.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
@@ -17,16 +18,25 @@ class AppDatabase {
 
   // PUBLIC_INTERFACE
   Future<void> open() async {
+    /// Opens the SQLite database and initializes schema if needed.
+    ///
+    /// Test behavior:
+    /// When `TestConfig.disableAutoStart` is enabled (widget tests), we open an
+    /// in-memory database to avoid `getDatabasesPath()` and filesystem IO that
+    /// can hang in CI or when no platform path provider is available.
     if (_db != null) return;
 
-    final String databasesPath = await getDatabasesPath();
-    final String path = p.join(databasesPath, _dbName);
+    final String path;
+    if (TestConfig.disableAutoStart) {
+      // In-memory DB is deterministic and avoids platform path resolution.
+      path = inMemoryDatabasePath;
+    } else {
+      final String databasesPath = await getDatabasesPath();
+      path = p.join(databasesPath, _dbName);
+    }
 
-    _db = await openDatabase(
-      path,
-      version: _schemaVersion,
-      onCreate: (Database db, int version) async {
-        await db.execute('''
+    Future<void> createSchema(Database db) async {
+      await db.execute('''
 CREATE TABLE downloads (
   id TEXT PRIMARY KEY,
   content_id TEXT NOT NULL,
@@ -40,7 +50,7 @@ CREATE TABLE downloads (
 )
 ''');
 
-        await db.execute('''
+      await db.execute('''
 CREATE TABLE download_queue (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   paused INTEGER NOT NULL,
@@ -48,9 +58,9 @@ CREATE TABLE download_queue (
 )
 ''');
 
-        await db.execute('INSERT INTO download_queue(id, paused, updated_at_ms) VALUES (1, 0, 0)');
+      await db.execute('INSERT INTO download_queue(id, paused, updated_at_ms) VALUES (1, 0, 0)');
 
-        await db.execute('''
+      await db.execute('''
 CREATE TABLE watch_history (
   content_id TEXT PRIMARY KEY,
   position_seconds INTEGER NOT NULL,
@@ -58,12 +68,19 @@ CREATE TABLE watch_history (
 )
 ''');
 
-        await db.execute('''
+      await db.execute('''
 CREATE TABLE recent_searches (
   query TEXT PRIMARY KEY,
   updated_at_ms INTEGER NOT NULL
 )
 ''');
+    }
+
+    _db = await openDatabase(
+      path,
+      version: _schemaVersion,
+      onCreate: (Database db, int version) async {
+        await createSchema(db);
       },
     );
   }

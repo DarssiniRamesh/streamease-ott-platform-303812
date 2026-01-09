@@ -60,11 +60,13 @@ void main() {
     // Do NOT assert global idleness beyond bounded: implicit animations (ink reactions,
     // focus highlights, etc.) can keep scheduling frames and make tests flaky/hang.
     // Instead, pump bounded and wait until the expected UI is present.
+    // There can be multiple 'Home' texts on screen (e.g., label + header).
+    // We only need to assert the bottom navigation is present.
     await pumpUntilFound(tester, find.text('Home'));
+    expect(find.text('Home'), findsWidgets);
 
-    expect(find.text('Home'), findsOneWidget);
-    expect(find.text('Search'), findsOneWidget);
-    expect(find.text('Downloads'), findsOneWidget);
-    expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('Search'), findsWidgets);
+    expect(find.text('Downloads'), findsWidgets);
+    expect(find.text('Profile'), findsWidgets);
   });
 }

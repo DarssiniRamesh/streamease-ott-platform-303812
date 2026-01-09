@@ -13,6 +13,8 @@ import 'package:ott_frontend/features/downloads/services/fake_download_engine.da
 import 'package:ott_frontend/persistence/app_database.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'test_helper.dart';
+
 class _SlowRemoteRepo implements ContentRepository {
   _SlowRemoteRepo({required this.item});
 
@@ -54,6 +56,10 @@ class _SlowRemoteRepo implements ContentRepository {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  setUpAll(() {
+    initSqfliteFfiForTests();
+  });
+
   testWidgets('Navigates to ContentDetails and renders immediately from cached details', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -79,11 +85,20 @@ void main() {
     final AppDatabase db = AppDatabase();
     await db.open();
 
+    final FakeDownloadEngine engine = FakeDownloadEngine();
+
+    addTearDown(() async {
+      // FakeDownloadEngine does not expose dispose(); cancel any running timers to
+      // avoid background activity that could keep the test isolate alive.
+      await engine.cancel(contentId: item.id);
+      await db.close();
+    });
+
     final deps = AppDependencies(
       simpleCache: cache,
       contentRepository: repo,
       appDatabase: db,
-      downloadEngine: FakeDownloadEngine(),
+      downloadEngine: engine,
     );
 
     await tester.pumpWidget(StreamEaseApp(deps: deps));
@@ -102,7 +117,5 @@ void main() {
     expect(find.text('Cached Title'), findsWidgets);
     expect(find.text('Cached Description'), findsOneWidget);
 
-    // Cleanup.
-    await db.close();
   });
 }

@@ -260,6 +260,12 @@
       "languageVersion": "3.7"
     },
     {
+      "name": "sqflite_common_ffi",
+      "rootUri": "file:///home/kavia/.pub-cache/hosted/pub.dev/sqflite_common_ffi-2.3.6",
+      "packageUri": "lib/",
+      "languageVersion": "3.7"
+    },
+    {
       "name": "sqflite_darwin",
       "rootUri": "file:///home/kavia/.pub-cache/hosted/pub.dev/sqflite_darwin-2.4.2",
       "packageUri": "lib/",
@@ -268,6 +274,12 @@
     {
       "name": "sqflite_platform_interface",
       "rootUri": "file:///home/kavia/.pub-cache/hosted/pub.dev/sqflite_platform_interface-2.4.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.5"
+    },
+    {
+      "name": "sqlite3",
+      "rootUri": "file:///home/kavia/.pub-cache/hosted/pub.dev/sqlite3-2.9.4",
       "packageUri": "lib/",
       "languageVersion": "3.5"
     },
@@ -308,6 +320,12 @@
       "languageVersion": "3.5"
     },
     {
+      "name": "typed_data",
+      "rootUri": "file:///home/kavia/.pub-cache/hosted/pub.dev/typed_data-1.4.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.5"
+    },
+    {
       "name": "vector_math",
       "rootUri": "file:///home/kavia/.pub-cache/hosted/pub.dev/vector_math-2.1.4",
       "packageUri": "lib/",
@@ -338,7 +356,7 @@
       "languageVersion": "3.7"
     }
   ],
-  "generated": "2026-01-09T19:02:46.664564Z",
+  "generated": "2026-01-09T19:16:03.306563Z",
   "generator": "pub",
   "generatorVersion": "3.7.0",
   "flutterRoot": "file:///opt/flutter",

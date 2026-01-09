@@ -13,6 +13,9 @@ class HomeController extends ChangeNotifier {
     // SWR: when repository updates its cache after a background refresh,
     // reload the home feed and notify listeners.
     _cacheListener = () {
+      // Guard against late cache-buster events after disposal.
+      if (_disposed) return;
+
       // No await here; keep callback sync-safe.
       refreshFromCache();
     };
@@ -25,6 +28,8 @@ class HomeController extends ChangeNotifier {
   final ContentRepository repository;
 
   VoidCallback? _cacheListener;
+
+  bool _disposed = false;
 
   HomeLoadState _state = HomeLoadState.loading;
   HomeLoadState get state => _state;
@@ -47,55 +52,74 @@ class HomeController extends ChangeNotifier {
   List<ContinueWatchingItem> get continueWatching =>
       List<ContinueWatchingItem>.unmodifiable(_continueWatching);
 
+  void _notifyIfAlive() {
+    if (_disposed) return;
+    notifyListeners();
+  }
+
   // PUBLIC_INTERFACE
   Future<void> loadHomeFeed() async {
+    if (_disposed) return;
+
     _errorMessage = null;
     _refreshing = _hasEverLoaded; // treat later loads as refresh
     _state = _hasEverLoaded ? _state : HomeLoadState.loading;
-    notifyListeners();
+    _notifyIfAlive();
 
     try {
       // Home feed is cache-first and SWR-refreshes in background.
       final HomeFeedPayload payload = await repository.fetchHomeFeed();
+      if (_disposed) return;
+
       _payload = payload;
       _state = payload.rails.isEmpty ? HomeLoadState.empty : HomeLoadState.ready;
       _refreshing = false;
       _hasEverLoaded = true;
-      notifyListeners();
+      _notifyIfAlive();
 
       // Kick off continue watching load after we have *some* UI; this is DB-backed,
       // and details are cache-first via repository.getById().
       unawaited(loadContinueWatching());
     } catch (_) {
+      if (_disposed) return;
+
       _refreshing = false;
 
       // If we have data already (likely cached), keep it and show a soft error.
       if (_payload != null) {
         _errorMessage = 'Failed to refresh home feed.';
-        notifyListeners();
+        _notifyIfAlive();
         return;
       }
 
       _state = HomeLoadState.error;
       _errorMessage = 'Failed to load home feed.';
-      notifyListeners();
+      _notifyIfAlive();
     }
   }
 
   // PUBLIC_INTERFACE
   Future<void> loadContinueWatching({int limit = 10}) async {
+    if (_disposed) return;
+
     _continueWatchingLoading = true;
-    notifyListeners();
+    _notifyIfAlive();
 
     try {
       // Repository delegates to DB when available (CachedContentRepository has db).
-      final List<WatchHistoryEntry> history = await repository.getRecentWatchHistory(limit: limit);
+      final List<WatchHistoryEntry> history =
+          await repository.getRecentWatchHistory(limit: limit);
+      if (_disposed) return;
 
       // Fetch content details for each history entry; repository.getById is cache-first,
       // and will SWR refresh in background.
       final List<ContinueWatchingItem> items = <ContinueWatchingItem>[];
       for (final WatchHistoryEntry h in history) {
+        if (_disposed) return;
+
         final ContentItem? it = await repository.getById(h.contentId);
+        if (_disposed) return;
+
         if (it != null) {
           items.add(
             ContinueWatchingItem(
@@ -106,16 +130,20 @@ class HomeController extends ChangeNotifier {
         }
       }
 
+      if (_disposed) return;
+
       _continueWatching
         ..clear()
         ..addAll(items);
 
       _continueWatchingLoading = false;
-      notifyListeners();
+      _notifyIfAlive();
     } catch (_) {
       // Soft-fail: keep previous continue-watching data if any.
+      if (_disposed) return;
+
       _continueWatchingLoading = false;
-      notifyListeners();
+      _notifyIfAlive();
     }
   }
 
@@ -126,14 +154,18 @@ class HomeController extends ChangeNotifier {
   /// BuildContext usage and relies purely on notifier state updates.
   // PUBLIC_INTERFACE
   Future<void> onPlaybackProgressPersisted() async {
+    if (_disposed) return;
     await loadContinueWatching();
   }
 
   // PUBLIC_INTERFACE
   Future<void> refreshFromCache() async {
+    if (_disposed) return;
+
     // When the repo cache refreshes, call fetchHomeFeed again.
     // It will return immediately with cached data (fresh).
     await loadHomeFeed();
+    if (_disposed) return;
 
     // Also refresh continue-watching so updated cached details show up, but don't
     // make it block the rails.
@@ -142,6 +174,8 @@ class HomeController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+
     final VoidCallback? l = _cacheListener;
     if (l != null) {
       repository.cacheBuster.removeListener(l);

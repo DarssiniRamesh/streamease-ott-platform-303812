@@ -159,6 +159,28 @@ void main() {
       expect(controller.state, HomeLoadState.ready);
       controller.dispose();
     });
+
+    test('cacheBuster events after dispose are ignored (no notify after dispose)', () async {
+      final _StubRepo repo = _StubRepo(
+        homeFeed: () => _payloadWithRails(1),
+        byId: (String _) => null,
+        searchResults: (String _) => <ContentItem>[],
+        recentWatchHistory: const <WatchHistoryEntry>[],
+      );
+
+      final HomeController controller = HomeController(repository: repo);
+      await controller.loadHomeFeed();
+
+      controller.dispose();
+
+      // If the controller still reacts to cache-buster changes after disposal,
+      // Flutter will throw (notifyListeners called after dispose). This should
+      // remain silent now.
+      repo.bust();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(true, isTrue);
+    });
   });
 
   group('AppSearchController', () {

@@ -145,8 +145,24 @@ class ContentDetailsController extends ChangeNotifier {
     await load();
   }
 
+  /// Handles the Play/Resume action.
+  ///
+  /// Playback is not implemented in this template app, but we still persist
+  /// watch-history as a write-through to SQLite so the Home "Continue Watching"
+  /// rail can be durable and restored on app start.
   // PUBLIC_INTERFACE
-  Future<void> recordPlaybackProgressSeconds(int positionSeconds) async {
+  Future<void> playPressed() async {
+    final int resumeFrom = (_lastWatchedSeconds ?? 0);
+    final int newPosition = resumeFrom <= 0 ? 30 : (resumeFrom + 30);
+    await updateProgressSeconds(newPosition);
+  }
+
+  /// Updates and persists playback progress for this content.
+  ///
+  /// This writes-through to the cache-decorated repository (and ultimately the
+  /// `watch_history` table in SQLite when available).
+  // PUBLIC_INTERFACE
+  Future<void> updateProgressSeconds(int positionSeconds) async {
     await repository.recordPlaybackProgress(
       contentId: contentId,
       positionSeconds: positionSeconds,
@@ -155,6 +171,12 @@ class ContentDetailsController extends ChangeNotifier {
     // Keep UI in sync with persisted position.
     _lastWatchedSeconds = positionSeconds;
     notifyListeners();
+  }
+
+  // PUBLIC_INTERFACE
+  Future<void> recordPlaybackProgressSeconds(int positionSeconds) async {
+    // Backwards-compatible shim for existing callers.
+    await updateProgressSeconds(positionSeconds);
   }
 
   // PUBLIC_INTERFACE

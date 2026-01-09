@@ -3,6 +3,7 @@ import 'package:ott_frontend/core/i18n/app_localizations.dart';
 import 'package:ott_frontend/core/services/app_bootstrap.dart';
 import 'package:ott_frontend/features/content/controllers/content_details_controller.dart';
 import 'package:ott_frontend/features/downloads/controllers/download_controller.dart';
+import 'package:ott_frontend/features/home/controllers/home_controller.dart';
 import 'package:provider/provider.dart';
 
 class ContentDetailsScreen extends StatelessWidget {
@@ -83,11 +84,13 @@ class ContentDetailsScreen extends StatelessWidget {
                           Expanded(
                             child: FilledButton.icon(
                               onPressed: () {
-                                // Playback seam (still not implemented) but we can
-                                // write-through a new watch position.
-                                final int resumeFrom = (c.lastWatchedSeconds ?? 0);
-                                final int newPosition = resumeFrom <= 0 ? 30 : (resumeFrom + 30);
-                                c.recordPlaybackProgressSeconds(newPosition);
+                                // Capture providers synchronously; no context usage after awaits.
+                                final HomeController home = context.read<HomeController>();
+
+                                () async {
+                                  await c.playPressed();
+                                  await home.onPlaybackProgressPersisted();
+                                }();
 
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(content: Text('Playback not implemented yet.')),

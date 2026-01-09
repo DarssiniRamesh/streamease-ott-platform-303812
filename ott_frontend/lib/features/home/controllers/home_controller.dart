@@ -119,6 +119,16 @@ class HomeController extends ChangeNotifier {
     }
   }
 
+  /// Refreshes Continue Watching after a playback progress write-through.
+  ///
+  /// This method is intended to be called by other controllers once they persist
+  /// watch progress to SQLite (via the cache-decorated repository). It avoids any
+  /// BuildContext usage and relies purely on notifier state updates.
+  // PUBLIC_INTERFACE
+  Future<void> onPlaybackProgressPersisted() async {
+    await loadContinueWatching();
+  }
+
   // PUBLIC_INTERFACE
   Future<void> refreshFromCache() async {
     // When the repo cache refreshes, call fetchHomeFeed again.

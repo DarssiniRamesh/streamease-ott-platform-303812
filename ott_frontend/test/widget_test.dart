@@ -1,18 +1,15 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ott_frontend/main.dart';
+import 'package:ott_frontend/app.dart';
+import 'package:ott_frontend/core/services/app_bootstrap.dart';
 
 void main() {
-  testWidgets('App generation message displayed', (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
+  testWidgets('App boots and shows bottom navigation', (WidgetTester tester) async {
+    final AppDependencies deps = await AppBootstrap.bootstrap();
+    await tester.pumpWidget(StreamEaseApp(deps: deps));
 
-    expect(find.text('ott_frontend App is being generated...'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
-  });
-
-  testWidgets('App bar has correct title', (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
-
-    expect(find.text('ott_frontend'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Search'), findsOneWidget);
+    expect(find.text('Downloads'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
   });
 }

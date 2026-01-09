@@ -1,0 +1,182 @@
+import 'package:flutter/material.dart';
+import 'package:ott_frontend/core/i18n/app_localizations.dart';
+import 'package:ott_frontend/core/routing/app_routes.dart';
+import 'package:ott_frontend/core/routing/app_router.dart';
+import 'package:ott_frontend/data/models/content_models.dart';
+import 'package:ott_frontend/features/home/controllers/home_controller.dart';
+import 'package:ott_frontend/widgets/content_card.dart';
+import 'package:ott_frontend/widgets/rail_skeleton.dart';
+import 'package:provider/provider.dart';
+
+class HomeRootScreen extends StatelessWidget {
+  const HomeRootScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations t = AppLocalizations.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(t.home),
+        actions: <Widget>[
+          IconButton(
+            tooltip: t.search,
+            onPressed: () => Navigator.of(context).pushNamed(AppRoutes.search),
+            icon: const Icon(Icons.search),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Consumer<HomeController>(
+          builder: (BuildContext context, HomeController c, _) {
+            if (c.state == HomeLoadState.loading) {
+              return const _HomeLoading();
+            }
+            if (c.state == HomeLoadState.error) {
+              return _HomeError(message: c.errorMessage ?? 'Error', onRetry: c.loadHomeFeed);
+            }
+
+            final HomeFeedPayload? payload = c.payload;
+            final List<ContentRail> rails = payload?.rails ?? const <ContentRail>[];
+            if (rails.isEmpty) {
+              return _HomeEmpty(onRetry: c.loadHomeFeed);
+            }
+
+            return RefreshIndicator(
+              onRefresh: c.loadHomeFeed,
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 24),
+                children: <Widget>[
+                  if (c.showingStaleCache && (c.errorMessage?.isNotEmpty ?? false))
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: Material(
+                        color: Theme.of(context).colorScheme.secondary.withAlpha(25),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            c.errorMessage!,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ),
+                    ),
+                  for (final ContentRail rail in rails) ...<Widget>[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+                      child: Text(
+                        rail.title,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    SizedBox(
+                      height: 190,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemBuilder: (BuildContext context, int index) {
+                          final ContentItem item = rail.items[index];
+                          return Semantics(
+                            button: true,
+                            label: item.title,
+                            child: ContentCard(
+                              title: item.title,
+                              subtitle: item.genres.isEmpty ? null : item.genres.first,
+                              onTap: () {
+                                Navigator.of(context).pushNamed(
+                                  AppRoutes.contentDetails,
+                                  arguments: ContentDetailsArgs(contentId: item.id),
+                                );
+                              },
+                            ),
+                          );
+                        },
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
+                        itemCount: rail.items.length,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeLoading extends StatelessWidget {
+  const _HomeLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: const <Widget>[
+        RailSkeleton(),
+        RailSkeleton(),
+        RailSkeleton(),
+      ],
+    );
+  }
+}
+
+class _HomeError extends StatelessWidget {
+  const _HomeError({required this.message, required this.onRetry});
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            FilledButton(
+              onPressed: () {
+                // no await; avoid context across async gap
+                onRetry();
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeEmpty extends StatelessWidget {
+  const _HomeEmpty({required this.onRetry});
+
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Text('Nothing to show yet.'),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: () {
+                onRetry();
+              },
+              child: const Text('Reload'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

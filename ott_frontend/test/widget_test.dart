@@ -24,9 +24,6 @@ void main() {
   });
 
   testWidgets('App boots and shows bottom navigation', (WidgetTester tester) async {
-    // Must be mocked before *any* bootstrap work (bootstrap calls getInstance()).
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-
     final AppDependencies deps = await AppBootstrap.bootstrap();
 
     addTearDown(() async {

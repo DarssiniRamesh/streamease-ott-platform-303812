@@ -14,6 +14,10 @@ class HomeController extends ChangeNotifier {
     // SWR: when repository updates its cache after a background refresh,
     // reload the home feed and notify listeners.
     _cacheListener = () {
+      // In widget tests we disable auto-start to avoid any SWR-driven background
+      // work that can keep scheduling frames and cause hangs.
+      if (TestConfig.disableAutoStart) return;
+
       // Guard against late cache-buster events after disposal.
       if (_disposed) return;
 

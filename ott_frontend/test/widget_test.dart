@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ott_frontend/app.dart';
 import 'package:ott_frontend/core/services/app_bootstrap.dart';
@@ -16,13 +15,7 @@ void main() {
 
     addTearDown(() async {
       // Dispose widget tree first so providers/controllers cancel debounces/listeners.
-      await tester.pumpWidget(
-        const Directionality(
-          textDirection: TextDirection.ltr,
-          child: SizedBox(),
-        ),
-      );
-      await pumpAndSettleBounded(tester, max: const Duration(seconds: 1));
+      await unmountWidgetTree(tester);
 
       // Then close DB / cancel any download timers.
       await disposeAppDependencies(deps);
@@ -31,7 +24,7 @@ void main() {
     await tester.pumpWidget(StreamEaseApp(deps: deps));
 
     // Allow initial provider async work to run, but avoid unbounded pumpAndSettle.
-    await pumpAndSettleBounded(tester, max: const Duration(seconds: 2));
+    await pumpAndSettleBounded(tester, timeout: const Duration(seconds: 2));
 
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Search'), findsOneWidget);

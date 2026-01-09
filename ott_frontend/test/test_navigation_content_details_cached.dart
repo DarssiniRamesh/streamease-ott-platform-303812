@@ -89,13 +89,7 @@ void main() {
 
     addTearDown(() async {
       // Tear down widget tree first to dispose providers/controllers.
-      await tester.pumpWidget(
-        const Directionality(
-          textDirection: TextDirection.ltr,
-          child: SizedBox(),
-        ),
-      );
-      await pumpAndSettleBounded(tester, max: const Duration(seconds: 1));
+      await unmountWidgetTree(tester);
 
       // Cancel any active timers and close DB.
       await engine.cancelAll();
@@ -110,19 +104,20 @@ void main() {
     );
 
     await tester.pumpWidget(StreamEaseApp(deps: deps));
-    await pumpAndSettleBounded(tester, max: const Duration(seconds: 1));
+    await pumpAndSettleBounded(tester, timeout: const Duration(seconds: 1));
 
-    // Navigate via the Router API, but scheduled through the test event loop.
-    // This avoids direct NavigatorState manipulation that can sometimes leave
-    // pending microtasks/frames in widget tests.
-    tester
-        .state<NavigatorState>(find.byType(Navigator))
-        .pushNamed(
+    // Ensure we are on a stable initial frame before navigation.
+    await tester.tap(find.text('Home'));
+    await pumpAndSettleBounded(tester, timeout: const Duration(milliseconds: 800));
+
+    // Navigate using NavigatorState.pushNamed, but keep pumping bounded (never
+    // wait for an unbounded settle).
+    tester.state<NavigatorState>(find.byType(Navigator)).pushNamed(
           AppRoutes.contentDetails,
           arguments: const ContentDetailsArgs(contentId: 'm1'),
         );
     await tester.pump();
-    await pumpAndSettleBounded(tester, max: const Duration(milliseconds: 800));
+    await pumpAndSettleBounded(tester, timeout: const Duration(milliseconds: 800));
 
     // Cached title should be rendered without waiting 2 seconds for remote.
     expect(find.text('Cached Title'), findsWidgets);

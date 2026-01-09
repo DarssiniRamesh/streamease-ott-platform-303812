@@ -1,3 +1,5 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:ott_frontend/core/services/app_bootstrap.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// PUBLIC_INTERFACE
@@ -7,4 +9,35 @@ void initSqfliteFfiForTests() {
   /// available (e.g., in `flutter test` on CI).
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfi;
+}
+
+/// PUBLIC_INTERFACE
+Future<void> pumpAndSettleBounded(
+  WidgetTester tester, {
+  Duration max = const Duration(seconds: 2),
+  Duration step = const Duration(milliseconds: 20),
+}) async {
+  /// Pump frames until no transient callbacks remain, but with a hard upper bound
+  /// so tests cannot hang indefinitely if something schedules work forever.
+  final DateTime start = DateTime.now();
+  while (true) {
+    await tester.pump(step);
+    if (!tester.binding.hasScheduledFrame) return;
+    if (DateTime.now().difference(start) >= max) return;
+  }
+}
+
+/// PUBLIC_INTERFACE
+Future<void> disposeAppDependencies(AppDependencies deps) async {
+  /// Best-effort cleanup for widget tests to avoid keeping the isolate alive.
+  ///
+  /// - Close SQLite handle
+  /// - Cancel any active download timers (when using FakeDownloadEngine)
+  await deps.downloadEngine.cancel(contentId: 'm1');
+  await deps.downloadEngine.cancel(contentId: 'm2');
+  await deps.downloadEngine.cancel(contentId: 'm3');
+  await deps.downloadEngine.cancel(contentId: 's1e1');
+  await deps.downloadEngine.cancel(contentId: 's1e2');
+  await deps.downloadEngine.cancel(contentId: 'm4');
+  await deps.appDatabase.close();
 }

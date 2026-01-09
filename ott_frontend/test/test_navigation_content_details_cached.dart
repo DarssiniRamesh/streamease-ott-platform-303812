@@ -88,9 +88,13 @@ void main() {
     final FakeDownloadEngine engine = FakeDownloadEngine();
 
     addTearDown(() async {
-      // FakeDownloadEngine does not expose dispose(); cancel any running timers to
-      // avoid background activity that could keep the test isolate alive.
+      // Tear down widget tree first to dispose providers/controllers.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await pumpAndSettleBounded(tester);
+
+      // Cancel any active timers and close DB.
       await engine.cancel(contentId: item.id);
+      await engine.cancelAll();
       await db.close();
     });
 
@@ -102,6 +106,7 @@ void main() {
     );
 
     await tester.pumpWidget(StreamEaseApp(deps: deps));
+    await pumpAndSettleBounded(tester);
 
     // Navigate programmatically (no need to depend on Home feed / delays).
     final NavigatorState nav = tester.state<NavigatorState>(find.byType(Navigator));
@@ -110,12 +115,12 @@ void main() {
       arguments: const ContentDetailsArgs(contentId: 'm1'),
     );
 
-    // Pump once: screen builds, controller loads and should synchronously get cached content.
+    // Pump enough to build the route + run controller load, but don't wait for slow remote.
     await tester.pump();
+    await pumpAndSettleBounded(tester, max: const Duration(milliseconds: 500));
 
     // Cached title should be rendered without waiting 2 seconds for remote.
     expect(find.text('Cached Title'), findsWidgets);
     expect(find.text('Cached Description'), findsOneWidget);
-
   });
 }

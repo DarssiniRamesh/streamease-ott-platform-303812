@@ -11,11 +11,12 @@ class AppSearchController extends ChangeNotifier {
     required this.cache,
     this.db,
   }) {
-    _cacheListener = () {
-      // In widget tests we disable auto-start to avoid any SWR-driven background
-      // work that can keep scheduling frames and cause hangs.
-      if (TestConfig.disableAutoStart) return;
+    // In widget tests, do not even register cache-buster listeners.
+    // This prevents any refresh cascades if some other path accidentally
+    // bumps cacheBuster (and keeps tests deterministic).
+    if (TestConfig.disableAutoStart) return;
 
+    _cacheListener = () {
       final String q = _query.trim();
       if (q.isEmpty) return;
 

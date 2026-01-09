@@ -58,6 +58,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() {
+    // CRITICAL: must happen before any SharedPreferences.getInstance() anywhere.
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+
     initSqfliteFfiForTests();
   });
 
@@ -102,6 +105,9 @@ void main() {
     addTearDown(() async {
       // Reset test config first (so later tests start clean).
       TestConfig.reset();
+
+      // Ensure next tests cannot observe any leftover preference state.
+      SharedPreferences.setMockInitialValues(<String, Object>{});
 
       // Tear down widget tree first to dispose providers/controllers.
       // (Includes a final unmount to const SizedBox() + bounded pumps.)

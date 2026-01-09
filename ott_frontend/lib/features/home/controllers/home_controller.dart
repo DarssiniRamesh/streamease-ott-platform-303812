@@ -11,13 +11,13 @@ enum HomeLoadState { loading, ready, empty, error }
 
 class HomeController extends ChangeNotifier {
   HomeController({required this.repository}) {
+    // In widget tests, do not even register cache-buster listeners to prevent
+    // any SWR refresh cascades from scheduling frames.
+    if (TestConfig.disableAutoStart) return;
+
     // SWR: when repository updates its cache after a background refresh,
     // reload the home feed and notify listeners.
     _cacheListener = () {
-      // In widget tests we disable auto-start to avoid any SWR-driven background
-      // work that can keep scheduling frames and cause hangs.
-      if (TestConfig.disableAutoStart) return;
-
       // Guard against late cache-buster events after disposal.
       if (_disposed) return;
 

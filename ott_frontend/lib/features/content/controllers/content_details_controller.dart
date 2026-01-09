@@ -14,12 +14,11 @@ class ContentDetailsController extends ChangeNotifier {
     required this.contentId,
     this.db,
   }) {
-    _cacheListener = () {
-      // In widget tests we disable auto-start to prevent SWR refresh completion
-      // from continuously triggering additional loads that can keep scheduling
-      // frames and cause hangs.
-      if (TestConfig.disableAutoStart) return;
+    // In widget tests, do not even register cache-buster listeners. This avoids
+    // refresh cascades that can keep scheduling frames and cause hangs.
+    if (TestConfig.disableAutoStart) return;
 
+    _cacheListener = () {
       // Cache-buster callbacks may still fire after widget disposal if the
       // repository refresh completes late. Guard to avoid notify after dispose.
       if (_disposed) return;

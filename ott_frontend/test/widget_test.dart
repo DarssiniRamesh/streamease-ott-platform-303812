@@ -10,8 +10,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() {
-    // Must be initialized before any SharedPreferences.getInstance() calls, including
-    // any potential indirect calls during bootstrap in future refactors.
+    // CRITICAL: must be initialized before any SharedPreferences.getInstance()
+    // calls, including any potential indirect calls during bootstrap.
     SharedPreferences.setMockInitialValues(<String, Object>{});
 
     // Must occur before any AppDatabase.open calls (AppBootstrap.bootstrap opens SQLite).
@@ -43,10 +43,13 @@ void main() {
       // Order matters:
       // 1) unmount the widget tree so Providers dispose controllers/tickers/listeners
       // 2) dispose app dependencies (DB, timers)
-      // 3) reset global test config
+      // 3) reset global test config + prefs mock (keep subsequent tests deterministic)
       await unmountWidgetTree(tester);
       await disposeAppDependencies(deps);
       TestConfig.reset();
+
+      // Ensure next tests cannot observe any leftover preference state.
+      SharedPreferences.setMockInitialValues(<String, Object>{});
 
       // Final fail-fast: verify nothing is still scheduling frames.
       await assertNoScheduledFramesAfterPumps(

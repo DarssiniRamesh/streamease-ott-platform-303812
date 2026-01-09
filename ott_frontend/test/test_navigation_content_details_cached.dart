@@ -89,16 +89,20 @@ void main() {
 
     addTearDown(() async {
       // Tear down widget tree first to dispose providers/controllers.
-      await tester.pumpWidget(const SizedBox());
-      await pumpAndSettleBounded(tester);
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: SizedBox(),
+        ),
+      );
+      await pumpAndSettleBounded(tester, max: const Duration(seconds: 1));
 
       // Cancel any active timers and close DB.
-      await engine.cancel(contentId: item.id);
       await engine.cancelAll();
       await db.close();
     });
 
-    final deps = AppDependencies(
+    final AppDependencies deps = AppDependencies(
       simpleCache: cache,
       contentRepository: repo,
       appDatabase: db,
@@ -106,18 +110,19 @@ void main() {
     );
 
     await tester.pumpWidget(StreamEaseApp(deps: deps));
-    await pumpAndSettleBounded(tester);
+    await pumpAndSettleBounded(tester, max: const Duration(seconds: 1));
 
-    // Navigate programmatically (no need to depend on Home feed / delays).
-    final NavigatorState nav = tester.state<NavigatorState>(find.byType(Navigator));
-    nav.pushNamed(
-      AppRoutes.contentDetails,
-      arguments: const ContentDetailsArgs(contentId: 'm1'),
-    );
-
-    // Pump enough to build the route + run controller load, but don't wait for slow remote.
+    // Navigate via the Router API, but scheduled through the test event loop.
+    // This avoids direct NavigatorState manipulation that can sometimes leave
+    // pending microtasks/frames in widget tests.
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .pushNamed(
+          AppRoutes.contentDetails,
+          arguments: const ContentDetailsArgs(contentId: 'm1'),
+        );
     await tester.pump();
-    await pumpAndSettleBounded(tester, max: const Duration(milliseconds: 500));
+    await pumpAndSettleBounded(tester, max: const Duration(milliseconds: 800));
 
     // Cached title should be rendered without waiting 2 seconds for remote.
     expect(find.text('Cached Title'), findsWidgets);

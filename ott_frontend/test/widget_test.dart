@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ott_frontend/app.dart';
 import 'package:ott_frontend/core/services/app_bootstrap.dart';
@@ -16,8 +16,13 @@ void main() {
 
     addTearDown(() async {
       // Dispose widget tree first so providers/controllers cancel debounces/listeners.
-      await tester.pumpWidget(const SizedBox());
-      await pumpAndSettleBounded(tester);
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: SizedBox(),
+        ),
+      );
+      await pumpAndSettleBounded(tester, max: const Duration(seconds: 1));
 
       // Then close DB / cancel any download timers.
       await disposeAppDependencies(deps);

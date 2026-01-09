@@ -18,12 +18,18 @@ Future<void> pumpAndSettleBounded(
   Duration max = const Duration(seconds: 2),
   Duration step = const Duration(milliseconds: 20),
 }) async {
-  /// Pump frames until no transient callbacks remain, but with a hard upper bound
-  /// so tests cannot hang indefinitely if something schedules work forever.
+  /// Pump frames until the framework is *actually* idle, but with a hard upper
+  /// bound so tests cannot hang indefinitely if something schedules work forever.
+  ///
+  /// We consider the app idle when there is no scheduled frame. Since some
+  /// Flutter versions/bindings used in CI don't expose transient-callback APIs
+  /// here, we rely on this signal plus a strict max duration to prevent hangs.
   final DateTime start = DateTime.now();
   while (true) {
     await tester.pump(step);
+
     if (!tester.binding.hasScheduledFrame) return;
+
     if (DateTime.now().difference(start) >= max) return;
   }
 }

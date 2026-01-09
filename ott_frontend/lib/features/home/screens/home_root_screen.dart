@@ -21,7 +21,15 @@ class HomeRootScreen extends StatelessWidget {
         actions: <Widget>[
           IconButton(
             tooltip: t.search,
-            onPressed: () => Navigator.of(context).pushNamed(AppRoutes.search),
+            // AppShell owns the Search tab; `/search` isn't a global route in AppRouter.
+            // Using bottom-nav selection avoids a missing-route error.
+            onPressed: () {
+              DefaultTabController.maybeOf(context)?.animateTo(1);
+              // If no TabController exists (our shell uses NavigationBar), use ScaffoldMessenger hint.
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Use the Search tab below.')),
+              );
+            },
             icon: const Icon(Icons.search),
           ),
         ],

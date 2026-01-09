@@ -49,7 +49,15 @@ void main() {
 
     await tester.pumpWidget(StreamEaseApp(deps: deps));
 
-    // Do NOT assert global idleness here: implicit animations (ink reactions,
+    // Fail fast if any unexpected background work starts scheduling frames
+    // continuously (prevents silent hangs).
+    await pumpUntilNoScheduledFrames(
+      tester,
+      timeout: const Duration(seconds: 1),
+      reason: 'App did not go idle after initial build; background work may be running.',
+    );
+
+    // Do NOT assert global idleness beyond bounded: implicit animations (ink reactions,
     // focus highlights, etc.) can keep scheduling frames and make tests flaky/hang.
     // Instead, pump bounded and wait until the expected UI is present.
     await pumpUntilFound(tester, find.text('Home'));

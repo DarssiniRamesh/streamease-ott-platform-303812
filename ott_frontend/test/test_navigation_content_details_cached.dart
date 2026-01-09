@@ -140,8 +140,13 @@ void main() {
           arguments: const ContentDetailsArgs(contentId: 'm1'),
         );
 
-    // Allow route transition frame(s).
+    // Allow route transition frame(s) and then fail-fast if frames keep scheduling.
     await tester.pump(const Duration(milliseconds: 50));
+    await pumpUntilNoScheduledFrames(
+      tester,
+      timeout: const Duration(seconds: 1),
+      reason: 'Route transition did not go idle; possible background work started.',
+    );
 
     // Cached title should be rendered without waiting 2 seconds for remote.
     await pumpUntilFound(tester, find.text('Cached Title'));

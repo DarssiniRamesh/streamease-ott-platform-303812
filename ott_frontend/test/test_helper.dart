@@ -129,6 +129,33 @@ Future<void> pumpUntilFound(
 }
 
 /// PUBLIC_INTERFACE
+Future<void> pumpUntilNoScheduledFrames(
+  WidgetTester tester, {
+  Duration timeout = const Duration(seconds: 2),
+  Duration step = const Duration(milliseconds: 16),
+  String reason = 'Framework kept scheduling frames (likely a timer/stream/animation).',
+}) async {
+  /// Pumps frames until the framework is idle (`hasScheduledFrame == false`)
+  /// or until [timeout] is reached.
+  ///
+  /// This prevents silent hangs by timing out with a clear assertion.
+  final Stopwatch sw = Stopwatch()..start();
+
+  // Always pump at least once.
+  await tester.pump(step);
+
+  while (tester.binding.hasScheduledFrame && sw.elapsed < timeout) {
+    await tester.pump(step);
+  }
+
+  expect(
+    tester.binding.hasScheduledFrame,
+    isFalse,
+    reason: '$reason Timeout after ${timeout.inMilliseconds}ms.',
+  );
+}
+
+/// PUBLIC_INTERFACE
 Future<void> unmountWidgetTree(WidgetTester tester) async {
   /// Unmounts any current widget tree and pumps a bounded settle.
   ///

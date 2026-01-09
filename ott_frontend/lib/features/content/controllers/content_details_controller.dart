@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:ott_frontend/core/services/simple_cache.dart';
+import 'package:ott_frontend/core/services/test_config.dart';
 import 'package:ott_frontend/data/models/content_models.dart';
 import 'package:ott_frontend/data/repositories/content_repository.dart';
 import 'package:ott_frontend/persistence/app_database.dart';
@@ -14,6 +15,11 @@ class ContentDetailsController extends ChangeNotifier {
     this.db,
   }) {
     _cacheListener = () {
+      // In widget tests we disable auto-start to prevent SWR refresh completion
+      // from continuously triggering additional loads that can keep scheduling
+      // frames and cause hangs.
+      if (TestConfig.disableAutoStart) return;
+
       // Cache-buster callbacks may still fire after widget disposal if the
       // repository refresh completes late. Guard to avoid notify after dispose.
       if (_disposed) return;

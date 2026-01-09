@@ -5,6 +5,7 @@ import 'package:ott_frontend/data/models/content_models.dart';
 import 'package:ott_frontend/data/repositories/content_repository.dart';
 import 'package:ott_frontend/persistence/app_database.dart';
 
+
 class FakeContentRepository implements ContentRepository {
   final Random _rng = Random(7);
 

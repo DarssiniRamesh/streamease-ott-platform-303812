@@ -8,7 +8,9 @@ class AppSearchController extends ChangeNotifier {
     _cacheListener = () {
       final String q = _query.trim();
       if (q.isEmpty) return;
-      // SWR refresh completion: re-run the search to pick up fresh cached results.
+
+      // SWR refresh completion: re-run the query to pick up fresh cached results,
+      // without modifying the "recent searches" list or toggling loading UI.
       refreshFromCache();
     };
     repository.cacheBuster.addListener(_cacheListener!);
@@ -35,11 +37,42 @@ class AppSearchController extends ChangeNotifier {
 
   List<String> get recent => cache.getStringList(_recentKey);
 
+  bool _refreshInFlight = false;
+
   // PUBLIC_INTERFACE
   void setQuery(String value) {
     _query = value;
     _errorMessage = null;
     notifyListeners();
+  }
+
+  Future<void> _runQuery({required String query, required bool updateRecents}) async {
+    if (query.trim().isEmpty) {
+      _results = <ContentItem>[];
+      _errorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final List<ContentItem> r = await repository.search(query);
+      _results = r;
+
+      if (updateRecents) {
+        final List<String> existing = cache.getStringList(_recentKey);
+        final List<String> next =
+            <String>[query, ...existing.where((String e) => e.toLowerCase() != query.toLowerCase())]
+                .take(10)
+                .toList();
+        await cache.setStringList(_recentKey, next);
+      }
+
+      notifyListeners();
+    } catch (_) {
+      _results = <ContentItem>[];
+      _errorMessage = 'Search failed.';
+      notifyListeners();
+    }
   }
 
   // PUBLIC_INTERFACE
@@ -56,34 +89,24 @@ class AppSearchController extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    try {
-      // Repository is cache-decorated (CachedContentRepository):
-      // - returns cached immediately when available
-      // - triggers background refresh that will bump cacheBuster later
-      final List<ContentItem> r = await repository.search(q);
+    await _runQuery(query: q, updateRecents: true);
 
-      // Recent searches list (small prefs cache).
-      final List<String> existing = cache.getStringList(_recentKey);
-      final List<String> next = <String>[q, ...existing.where((String e) => e.toLowerCase() != q.toLowerCase())]
-          .take(10)
-          .toList();
-      await cache.setStringList(_recentKey, next);
-
-      _results = r;
-      _loading = false;
-      notifyListeners();
-    } catch (_) {
-      _loading = false;
-      _results = <ContentItem>[];
-      _errorMessage = 'Search failed.';
-      notifyListeners();
-    }
+    _loading = false;
+    notifyListeners();
   }
 
   // PUBLIC_INTERFACE
   Future<void> refreshFromCache() async {
-    // Re-run current query; this should be instant due to cache.
-    await submit();
+    // Avoid piling up refresh work if cacheBuster is noisy.
+    if (_refreshInFlight) return;
+    _refreshInFlight = true;
+
+    final String q = _query.trim();
+    if (q.isNotEmpty) {
+      await _runQuery(query: q, updateRecents: false);
+    }
+
+    _refreshInFlight = false;
   }
 
   // PUBLIC_INTERFACE

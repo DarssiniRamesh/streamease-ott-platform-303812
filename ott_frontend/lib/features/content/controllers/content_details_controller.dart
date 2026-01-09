@@ -32,8 +32,13 @@ class ContentDetailsController extends ChangeNotifier {
 
   bool _hasEverLoaded = false;
 
+  bool _inFlight = false;
+
   // PUBLIC_INTERFACE
   Future<void> load() async {
+    if (_inFlight) return;
+    _inFlight = true;
+
     _errorMessage = null;
     _refreshing = _hasEverLoaded;
     _state = _hasEverLoaded ? _state : ContentDetailsState.loading;
@@ -51,9 +56,11 @@ class ContentDetailsController extends ChangeNotifier {
 
       _refreshing = false;
       _hasEverLoaded = true;
+      _inFlight = false;
       notifyListeners();
     } catch (_) {
       _refreshing = false;
+      _inFlight = false;
 
       if (_item != null) {
         _errorMessage = 'Failed to refresh content.';
@@ -69,6 +76,8 @@ class ContentDetailsController extends ChangeNotifier {
 
   // PUBLIC_INTERFACE
   Future<void> refreshFromCache() async {
+    // Cache-buster events can arrive frequently; avoid changing UX state beyond
+    // re-reading from the repository (which will be cache-first).
     await load();
   }
 

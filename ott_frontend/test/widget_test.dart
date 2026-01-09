@@ -22,6 +22,9 @@ void main() {
   });
 
   testWidgets('App boots and shows bottom navigation', (WidgetTester tester) async {
+    // Safety: ensure prefs are mocked before *any* bootstrap that may read them.
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+
     final AppDependencies deps = await AppBootstrap.bootstrap();
 
     addTearDown(() async {
@@ -35,24 +38,18 @@ void main() {
       // Then close DB / cancel any download timers.
       await disposeAppDependencies(deps);
 
-      // Extra bounded pumps to ensure the tree is truly idle after disposal.
-      await pumpFrames(tester, count: 40, step: const Duration(milliseconds: 16));
-
-      // After teardown there should be no scheduled frames.
-      expect(
-        tester.binding.hasScheduledFrame,
-        isFalse,
+      // Extra bounded pumps + fail fast if anything keeps scheduling frames.
+      await assertNoScheduledFramesAfterPumps(
+        tester,
         reason: 'Widget tree teardown left scheduled frames behind.',
       );
     });
 
     await tester.pumpWidget(StreamEaseApp(deps: deps));
 
-    // Explicit bounded pumps instead of any settle heuristic.
-    await pumpFrames(tester, count: 40, step: const Duration(milliseconds: 16));
-    expect(
-      tester.binding.hasScheduledFrame,
-      isFalse,
+    // Explicit bounded pumps + fail fast.
+    await assertNoScheduledFramesAfterPumps(
+      tester,
       reason: 'App left scheduled frames behind after initial boot pumps.',
     );
 

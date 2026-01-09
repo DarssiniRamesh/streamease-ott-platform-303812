@@ -71,6 +71,9 @@ void main() {
   });
 
   testWidgets('Navigates to ContentDetails and renders immediately from cached details', (WidgetTester tester) async {
+    // Safety: ensure prefs are mocked before *any* getInstance call (bootstrap-like work).
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final SimpleCache cache = SimpleCache(prefs: prefs);
 
@@ -108,12 +111,9 @@ void main() {
       await engine.cancelAll();
       await db.close();
 
-      // Extra bounded pumps to ensure the tree is truly idle after disposal.
-      await pumpFrames(tester, count: 40, step: const Duration(milliseconds: 16));
-
-      expect(
-        tester.binding.hasScheduledFrame,
-        isFalse,
+      // Extra bounded pumps + fail fast if anything keeps scheduling frames.
+      await assertNoScheduledFramesAfterPumps(
+        tester,
         reason: 'Widget tree teardown left scheduled frames behind.',
       );
     });
@@ -127,21 +127,17 @@ void main() {
 
     await tester.pumpWidget(StreamEaseApp(deps: deps));
 
-    // Explicit bounded pumps instead of any settle heuristic.
-    await pumpFrames(tester, count: 40, step: const Duration(milliseconds: 16));
-    expect(
-      tester.binding.hasScheduledFrame,
-      isFalse,
+    // Explicit bounded pumps + fail fast.
+    await assertNoScheduledFramesAfterPumps(
+      tester,
       reason: 'App left scheduled frames behind after initial boot pumps.',
     );
 
     // Ensure we are on a stable initial frame before navigation.
     await tester.tap(find.text('Home'));
     await tester.pump();
-    await pumpFrames(tester, count: 40, step: const Duration(milliseconds: 16));
-    expect(
-      tester.binding.hasScheduledFrame,
-      isFalse,
+    await assertNoScheduledFramesAfterPumps(
+      tester,
       reason: 'Tap/navigation left scheduled frames behind after bounded pumps.',
     );
 
@@ -151,10 +147,8 @@ void main() {
           arguments: const ContentDetailsArgs(contentId: 'm1'),
         );
     await tester.pump();
-    await pumpFrames(tester, count: 40, step: const Duration(milliseconds: 16));
-    expect(
-      tester.binding.hasScheduledFrame,
-      isFalse,
+    await assertNoScheduledFramesAfterPumps(
+      tester,
       reason: 'Route push left scheduled frames behind after bounded pumps.',
     );
 

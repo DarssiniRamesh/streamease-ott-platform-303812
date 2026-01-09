@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ott_frontend/core/i18n/app_localizations.dart';
 import 'package:ott_frontend/core/services/app_bootstrap.dart';
+import 'package:ott_frontend/core/services/test_config.dart';
 import 'package:ott_frontend/features/content/controllers/content_details_controller.dart';
 import 'package:ott_frontend/features/downloads/controllers/download_controller.dart';
 import 'package:ott_frontend/features/home/controllers/home_controller.dart';
@@ -19,12 +20,22 @@ class ContentDetailsScreen extends StatelessWidget {
     final AppDependencies deps = context.read<AppDependencies>();
 
     return ChangeNotifierProvider<ContentDetailsController>(
-      create: (_) => ContentDetailsController(
-        repository: deps.contentRepository,
-        cache: deps.simpleCache,
-        db: deps.appDatabase,
-        contentId: contentId,
-      )..load(),
+      create: (_) {
+        final ContentDetailsController c = ContentDetailsController(
+          repository: deps.contentRepository,
+          cache: deps.simpleCache,
+          db: deps.appDatabase,
+          contentId: contentId,
+        );
+
+        // In widget tests, we disable auto-start to prevent background work
+        // (SWR refreshes, cache-buster driven reloads) from scheduling frames.
+        if (!TestConfig.disableAutoStart) {
+          c.load();
+        }
+
+        return c;
+      },
       child: Consumer<ContentDetailsController>(
         builder: (BuildContext context, ContentDetailsController c, _) {
           final bool isReady = c.state == ContentDetailsState.ready && c.item != null;

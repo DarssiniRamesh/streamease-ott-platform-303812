@@ -38,6 +38,25 @@ Future<void> pumpFrames(
 }
 
 /// PUBLIC_INTERFACE
+Future<void> assertNoScheduledFramesAfterPumps(
+  WidgetTester tester, {
+  int frames = 40,
+  Duration step = const Duration(milliseconds: 16),
+  String reason = 'Test left scheduled frames behind after bounded pumps.',
+}) async {
+  /// Pumps a deterministic number of frames and asserts the framework is idle.
+  ///
+  /// This helps tests fail fast (instead of hanging) when a periodic timer,
+  /// animation, stream, or background refresh is still scheduling frames.
+  await pumpFrames(tester, count: frames, step: step);
+  expect(
+    tester.binding.hasScheduledFrame,
+    isFalse,
+    reason: reason,
+  );
+}
+
+/// PUBLIC_INTERFACE
 Future<void> pumpAndSettleBounded(
   WidgetTester tester, {
   Duration timeout = const Duration(seconds: 2),

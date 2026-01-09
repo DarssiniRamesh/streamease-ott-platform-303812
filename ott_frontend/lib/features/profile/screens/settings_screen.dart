@@ -15,6 +15,10 @@ class SettingsScreen extends StatelessWidget {
       body: SafeArea(
         child: Consumer<SettingsController>(
           builder: (BuildContext context, SettingsController s, _) {
+            if (s.loading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               children: <Widget>[
@@ -39,8 +43,10 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(t.subtitlesDefault,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                Text(
+                  t.subtitlesDefault,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                ),
                 const SizedBox(height: 8),
                 Card(
                   child: SwitchListTile(

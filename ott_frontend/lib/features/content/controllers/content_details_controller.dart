@@ -1,11 +1,16 @@
 import 'package:flutter/foundation.dart';
+import 'package:ott_frontend/core/services/simple_cache.dart';
 import 'package:ott_frontend/data/models/content_models.dart';
 import 'package:ott_frontend/data/repositories/content_repository.dart';
 
 enum ContentDetailsState { loading, ready, notFound, error }
 
 class ContentDetailsController extends ChangeNotifier {
-  ContentDetailsController({required this.repository, required this.contentId}) {
+  ContentDetailsController({
+    required this.repository,
+    required this.cache,
+    required this.contentId,
+  }) {
     _cacheListener = () {
       // Re-load from cache when SWR refresh completes.
       refreshFromCache();
@@ -14,6 +19,7 @@ class ContentDetailsController extends ChangeNotifier {
   }
 
   final ContentRepository repository;
+  final SimpleCache cache;
   final String contentId;
 
   VoidCallback? _cacheListener;
@@ -34,6 +40,14 @@ class ContentDetailsController extends ChangeNotifier {
 
   bool _inFlight = false;
 
+  int? _lastWatchedSeconds;
+  int? get lastWatchedSeconds => _lastWatchedSeconds;
+
+  static const String _watchlistKey = 'watchlist:ids';
+
+  bool _inWatchlist = false;
+  bool get inWatchlist => _inWatchlist;
+
   // PUBLIC_INTERFACE
   Future<void> load() async {
     if (_inFlight) return;
@@ -45,8 +59,15 @@ class ContentDetailsController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Fetch cached (or stale) details immediately; refresh happens in background.
       final ContentItem? it = await repository.getById(contentId);
       _item = it;
+
+      // Load watch progress from DB (best-effort; cache-decorated repo uses SQLite).
+      _lastWatchedSeconds = await repository.getPlaybackProgressSeconds(contentId: contentId);
+
+      // Load watchlist membership from preferences cache.
+      _inWatchlist = _isInWatchlist(contentId);
 
       if (it == null) {
         _state = ContentDetailsState.notFound;
@@ -74,6 +95,28 @@ class ContentDetailsController extends ChangeNotifier {
     }
   }
 
+  bool _isInWatchlist(String id) {
+    final List<String> existing = cache.getStringList(_watchlistKey);
+    return existing.contains(id);
+  }
+
+  // PUBLIC_INTERFACE
+  Future<void> toggleWatchlist() async {
+    final List<String> existing = cache.getStringList(_watchlistKey);
+    final List<String> next = List<String>.of(existing);
+
+    if (next.contains(contentId)) {
+      next.removeWhere((String e) => e == contentId);
+      _inWatchlist = false;
+    } else {
+      next.insert(0, contentId);
+      _inWatchlist = true;
+    }
+
+    await cache.setStringList(_watchlistKey, next.take(200).toList());
+    notifyListeners();
+  }
+
   // PUBLIC_INTERFACE
   Future<void> refreshFromCache() async {
     // Cache-buster events can arrive frequently; avoid changing UX state beyond
@@ -87,11 +130,17 @@ class ContentDetailsController extends ChangeNotifier {
       contentId: contentId,
       positionSeconds: positionSeconds,
     );
+
+    // Keep UI in sync with persisted position.
+    _lastWatchedSeconds = positionSeconds;
+    notifyListeners();
   }
 
   // PUBLIC_INTERFACE
   Future<void> recordPlaybackCompleted() async {
     await repository.recordPlaybackCompleted(contentId: contentId);
+    _lastWatchedSeconds = 0;
+    notifyListeners();
   }
 
   @override

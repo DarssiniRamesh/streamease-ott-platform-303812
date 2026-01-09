@@ -21,10 +21,19 @@ class ContentDetailsScreen extends StatelessWidget {
       create: (_) => ContentDetailsController(
         repository: deps.contentRepository,
         cache: deps.simpleCache,
+        db: deps.appDatabase,
         contentId: contentId,
       )..load(),
       child: Consumer<ContentDetailsController>(
         builder: (BuildContext context, ContentDetailsController c, _) {
+          final bool isReady = c.state == ContentDetailsState.ready && c.item != null;
+
+          final String downloadLabel = !isReady
+              ? t.enqueueDownload
+              : (c.hasDownload
+                  ? (c.downloadStatus == 'completed' ? 'Downloaded' : 'In Downloads')
+                  : t.enqueueDownload);
+
           return Scaffold(
             appBar: AppBar(title: Text(c.item?.title ?? 'Content')),
             body: SafeArea(
@@ -56,12 +65,10 @@ class ContentDetailsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(c.item!.description),
-
                       if ((c.lastWatchedSeconds ?? 0) > 0) ...<Widget>[
                         const SizedBox(height: 10),
                         _LastWatchedPill(seconds: c.lastWatchedSeconds!),
                       ],
-
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
@@ -93,17 +100,30 @@ class ContentDetailsScreen extends StatelessWidget {
                           const SizedBox(width: 12),
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: () {
-                                context.read<DownloadController>().enqueue(
-                                      contentId: c.item!.id,
-                                      title: c.item!.title,
-                                    );
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Added to downloads.')),
-                                );
-                              },
-                              icon: const Icon(Icons.download),
-                              label: Text(t.enqueueDownload),
+                              onPressed: !isReady
+                                  ? null
+                                  : (c.hasDownload
+                                      ? () {
+                                          // Navigate user to Downloads tab (shell); keep it simple with hint.
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Open the Downloads tab to manage.')),
+                                          );
+                                        }
+                                      : () {
+                                          context.read<DownloadController>().enqueue(
+                                                contentId: c.item!.id,
+                                                title: c.item!.title,
+                                              );
+
+                                          // Update local state immediately for UI reflect.
+                                          c.markDownloadEnqueuedLocally();
+
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Added to downloads.')),
+                                          );
+                                        }),
+                              icon: Icon(c.hasDownload ? Icons.download_done : Icons.download),
+                              label: Text(downloadLabel),
                             ),
                           ),
                         ],

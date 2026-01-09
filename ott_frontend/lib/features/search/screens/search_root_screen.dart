@@ -21,6 +21,8 @@ class SearchRootScreen extends StatelessWidget {
           builder: (BuildContext context, AppSearchController c, _) {
             final String q = c.query.trim();
 
+            final bool showEmptyResults = !c.loading && q.isNotEmpty && c.results.isEmpty;
+
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               children: <Widget>[
@@ -45,9 +47,27 @@ class SearchRootScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
 
-                // SWR visual cue: when a query is active, show a thin progress bar while
-                // the repository may refresh in background.
+                // Explicit user submit loading.
                 if (c.loading) const LinearProgressIndicator(minHeight: 3),
+
+                // Background SWR refresh: keep subtle.
+                if (!c.loading && c.refreshing) ...<Widget>[
+                  Row(
+                    children: <Widget>[
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Refreshing results…',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
 
                 if ((c.errorMessage?.isNotEmpty ?? false))
                   Padding(
@@ -91,6 +111,7 @@ class SearchRootScreen extends StatelessWidget {
                           .toList(),
                     ),
                     const SizedBox(height: 12),
+                    const Divider(height: 24),
                   ] else
                     const Padding(
                       padding: EdgeInsets.only(top: 24),
@@ -98,7 +119,7 @@ class SearchRootScreen extends StatelessWidget {
                     ),
                 ],
 
-                if (!c.loading && q.isNotEmpty && c.results.isEmpty)
+                if (showEmptyResults)
                   const Padding(
                     padding: EdgeInsets.only(top: 24),
                     child: Text('No results found.'),

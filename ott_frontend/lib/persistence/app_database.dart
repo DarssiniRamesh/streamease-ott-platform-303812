@@ -57,6 +57,13 @@ CREATE TABLE watch_history (
   updated_at_ms INTEGER NOT NULL
 )
 ''');
+
+        await db.execute('''
+CREATE TABLE recent_searches (
+  query TEXT PRIMARY KEY,
+  updated_at_ms INTEGER NOT NULL
+)
+''');
       },
     );
   }
@@ -119,6 +126,71 @@ CREATE TABLE watch_history (
         )
         .where((WatchHistoryEntry e) => e.contentId.isNotEmpty)
         .toList();
+  }
+
+  /// Adds a query to the durable recent-searches list.
+  // PUBLIC_INTERFACE
+  Future<void> upsertRecentSearch({required String query}) async {
+    final String q = query.trim();
+    if (q.isEmpty) return;
+    final int now = DateTime.now().millisecondsSinceEpoch;
+
+    await db.insert(
+      'recent_searches',
+      <String, Object?>{
+        'query': q,
+        'updated_at_ms': now,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Returns recent searches ordered by recency.
+  // PUBLIC_INTERFACE
+  Future<List<String>> getRecentSearches({int limit = 10}) async {
+    final List<Map<String, Object?>> rows = await db.query(
+      'recent_searches',
+      columns: <String>['query'],
+      orderBy: 'updated_at_ms DESC',
+      limit: limit,
+    );
+    return rows
+        .map((Map<String, Object?> r) => (r['query'] as String?) ?? '')
+        .where((String q) => q.trim().isNotEmpty)
+        .toList();
+  }
+
+  /// Clears all recent searches.
+  // PUBLIC_INTERFACE
+  Future<void> clearRecentSearches() async {
+    await db.delete('recent_searches');
+  }
+
+  /// Returns whether a download exists for a contentId.
+  // PUBLIC_INTERFACE
+  Future<bool> hasDownload({required String contentId}) async {
+    final List<Map<String, Object?>> rows = await db.query(
+      'downloads',
+      columns: <String>['content_id'],
+      where: 'content_id = ?',
+      whereArgs: <Object?>[contentId],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
+
+  /// Returns the current download status for a contentId, if present.
+  // PUBLIC_INTERFACE
+  Future<String?> getDownloadStatus({required String contentId}) async {
+    final List<Map<String, Object?>> rows = await db.query(
+      'downloads',
+      columns: <String>['status'],
+      where: 'content_id = ?',
+      whereArgs: <Object?>[contentId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['status'] as String?;
   }
 
   /// Ensures the single-row download queue state exists and returns whether the

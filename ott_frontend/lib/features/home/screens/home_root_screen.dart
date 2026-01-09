@@ -22,11 +22,14 @@ class HomeRootScreen extends StatelessWidget {
         actions: <Widget>[
           IconButton(
             tooltip: t.search,
-            // AppShell owns the Search tab; `/search` isn't a global route in AppRouter.
-            // Using bottom-nav selection avoids a missing-route error.
+            // AppShell owns the Search tab; if TabController exists, switch.
+            // Otherwise, show a gentle hint without attempting invalid navigation.
             onPressed: () {
-              DefaultTabController.maybeOf(context)?.animateTo(1);
-              // If no TabController exists (our shell uses NavigationBar), use ScaffoldMessenger hint.
+              final TabController? tab = DefaultTabController.maybeOf(context);
+              if (tab != null) {
+                tab.animateTo(1);
+                return;
+              }
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Use the Search tab below.')),
               );

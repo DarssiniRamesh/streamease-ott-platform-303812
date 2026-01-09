@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:ott_frontend/core/services/simple_cache.dart';
 import 'package:ott_frontend/data/models/content_models.dart';
 import 'package:ott_frontend/data/repositories/content_repository.dart';
+import 'package:ott_frontend/persistence/app_database.dart';
 
 enum ContentDetailsState { loading, ready, notFound, error }
 
@@ -10,6 +11,7 @@ class ContentDetailsController extends ChangeNotifier {
     required this.repository,
     required this.cache,
     required this.contentId,
+    this.db,
   }) {
     _cacheListener = () {
       // Re-load from cache when SWR refresh completes.
@@ -21,6 +23,9 @@ class ContentDetailsController extends ChangeNotifier {
   final ContentRepository repository;
   final SimpleCache cache;
   final String contentId;
+
+  /// Optional DB to read durable download state (enqueue/completed/etc).
+  final AppDatabase? db;
 
   VoidCallback? _cacheListener;
 
@@ -48,6 +53,12 @@ class ContentDetailsController extends ChangeNotifier {
   bool _inWatchlist = false;
   bool get inWatchlist => _inWatchlist;
 
+  bool _hasDownload = false;
+  bool get hasDownload => _hasDownload;
+
+  String? _downloadStatus;
+  String? get downloadStatus => _downloadStatus;
+
   // PUBLIC_INTERFACE
   Future<void> load() async {
     if (_inFlight) return;
@@ -68,6 +79,16 @@ class ContentDetailsController extends ChangeNotifier {
 
       // Load watchlist membership from preferences cache.
       _inWatchlist = _isInWatchlist(contentId);
+
+      // Load durable download state (if DB present).
+      final AppDatabase? d = db;
+      if (d != null) {
+        _hasDownload = await d.hasDownload(contentId: contentId);
+        _downloadStatus = await d.getDownloadStatus(contentId: contentId);
+      } else {
+        _hasDownload = false;
+        _downloadStatus = null;
+      }
 
       if (it == null) {
         _state = ContentDetailsState.notFound;
@@ -140,6 +161,15 @@ class ContentDetailsController extends ChangeNotifier {
   Future<void> recordPlaybackCompleted() async {
     await repository.recordPlaybackCompleted(contentId: contentId);
     _lastWatchedSeconds = 0;
+    notifyListeners();
+  }
+
+  // PUBLIC_INTERFACE
+  void markDownloadEnqueuedLocally() {
+    // Used by UI right after enqueue to reflect state immediately without
+    // waiting for DB reload / navigation.
+    _hasDownload = true;
+    _downloadStatus = 'downloading';
     notifyListeners();
   }
 

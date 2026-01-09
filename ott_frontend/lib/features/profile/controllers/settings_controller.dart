@@ -14,6 +14,12 @@ class SettingsController extends ChangeNotifier {
   bool _loading = true;
   bool get loading => _loading;
 
+  bool _saving = false;
+  bool get saving => _saving;
+
+  String? _errorMessage;
+  String? get errorMessage => _errorMessage;
+
   StreamingQuality _quality = StreamingQuality.auto;
   bool _subtitlesDefault = true;
 
@@ -23,35 +29,60 @@ class SettingsController extends ChangeNotifier {
   // PUBLIC_INTERFACE
   Future<void> load() async {
     _loading = true;
+    _errorMessage = null;
     notifyListeners();
 
-    final List<String> rawQuality = cache.getStringList(_qualityKey);
-    final String q = rawQuality.isEmpty ? 'auto' : rawQuality.first;
-    _quality = StreamingQuality.values.firstWhere(
-      (StreamingQuality e) => e.name == q,
-      orElse: () => StreamingQuality.auto,
-    );
+    try {
+      final List<String> rawQuality = cache.getStringList(_qualityKey);
+      final String q = rawQuality.isEmpty ? 'auto' : rawQuality.first;
+      _quality = StreamingQuality.values.firstWhere(
+        (StreamingQuality e) => e.name == q,
+        orElse: () => StreamingQuality.auto,
+      );
 
-    final List<String> subs = cache.getStringList(_subsKey);
-    _subtitlesDefault = subs.isNotEmpty ? subs.first == '1' : true;
+      final List<String> subs = cache.getStringList(_subsKey);
+      _subtitlesDefault = subs.isNotEmpty ? subs.first == '1' : true;
 
-    _loading = false;
-    notifyListeners();
+      _loading = false;
+      notifyListeners();
+    } catch (_) {
+      _loading = false;
+      _errorMessage = 'Failed to load settings.';
+      notifyListeners();
+    }
   }
 
   // PUBLIC_INTERFACE
   Future<void> setQuality(StreamingQuality q) async {
     _quality = q;
+    _saving = true;
+    _errorMessage = null;
     notifyListeners();
 
-    await cache.setStringList(_qualityKey, <String>[q.name]);
+    try {
+      await cache.setStringList(_qualityKey, <String>[q.name]);
+    } catch (_) {
+      _errorMessage = 'Failed to save quality setting.';
+    }
+
+    _saving = false;
+    notifyListeners();
   }
 
   // PUBLIC_INTERFACE
   Future<void> setSubtitlesDefault(bool enabled) async {
     _subtitlesDefault = enabled;
+    _saving = true;
+    _errorMessage = null;
     notifyListeners();
 
-    await cache.setStringList(_subsKey, <String>[enabled ? '1' : '0']);
+    try {
+      await cache.setStringList(_subsKey, <String>[enabled ? '1' : '0']);
+    } catch (_) {
+      _errorMessage = 'Failed to save subtitles setting.';
+    }
+
+    _saving = false;
+    notifyListeners();
   }
 }

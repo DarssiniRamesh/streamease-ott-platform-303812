@@ -31,7 +31,8 @@ class StreamEaseApp extends StatelessWidget {
           create: (_) => AppSearchController(
             repository: deps.contentRepository,
             cache: deps.simpleCache,
-          ),
+            db: deps.appDatabase,
+          )..loadRecent(),
         ),
         ChangeNotifierProvider<DownloadController>(
           create: (_) => DownloadController(

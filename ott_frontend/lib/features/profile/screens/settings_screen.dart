@@ -22,6 +22,22 @@ class SettingsScreen extends StatelessWidget {
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               children: <Widget>[
+                if (s.saving) ...<Widget>[
+                  const LinearProgressIndicator(minHeight: 3),
+                  const SizedBox(height: 12),
+                ],
+                if ((s.errorMessage?.isNotEmpty ?? false))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Material(
+                      color: Theme.of(context).colorScheme.error.withAlpha(12),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(s.errorMessage!),
+                      ),
+                    ),
+                  ),
                 Text(t.quality, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 8),
                 Card(
@@ -33,6 +49,7 @@ class SettingsScreen extends StatelessWidget {
                             groupValue: s.quality,
                             onChanged: (StreamingQuality? v) {
                               if (v != null) {
+                                // No await in UI; controller handles async internally.
                                 s.setQuality(v);
                               }
                             },

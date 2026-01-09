@@ -1,25 +1,27 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:ott_frontend/core/services/simple_cache.dart';
 import 'package:ott_frontend/data/models/content_models.dart';
 import 'package:ott_frontend/data/repositories/content_repository.dart';
+import 'package:ott_frontend/persistence/app_database.dart';
 
-/// A minimal cache decorator for the content repository.
+/// A cache decorator for the content repository implementing SWR semantics.
 ///
-/// This keeps the app architecture intact (controllers still depend on
-/// `ContentRepository`) while enabling a SharedPreferences/TTL cache for
-/// fast-path reads, plus stale-while-revalidate behavior.
+/// Key behavior:
+/// - Cache-first reads: return cached payloads immediately (fresh OR stale)
+/// - Background refresh: fetches latest from remote and updates cache
+/// - Notification: emits a `cacheBuster` tick whenever cache is updated, so
+///   controllers can reload state without duplicating cache logic.
 ///
-/// Caching strategy:
-/// - Home feed: TTL + stale fallback + background refresh (SWR).
-/// - Content details: TTL + stale fallback + background refresh (SWR).
-/// - Search results (optional): short TTL cache per normalized query.
-///   (Recents are handled by `AppSearchController`.)
+/// This keeps controllers simple while still enabling "serve stale immediately,
+/// then revalidate" (SWR).
 class CachedContentRepository implements ContentRepository {
   CachedContentRepository({
     required this.remote,
     required this.cache,
+    this.db,
     this.homeTtl = const Duration(minutes: 10),
     this.detailsTtl = const Duration(hours: 6),
     this.searchTtl = const Duration(minutes: 2),
@@ -28,11 +30,24 @@ class CachedContentRepository implements ContentRepository {
   final ContentRepository remote;
   final SimpleCache cache;
 
+  /// Optional DB used for write-through user state (watch history).
+  /// When omitted, watch history methods are best-effort no-ops.
+  final AppDatabase? db;
+
   final Duration homeTtl;
   final Duration detailsTtl;
   final Duration searchTtl;
 
   static const String _homeKey = 'home_feed_v1';
+
+  final ValueNotifier<int> _cacheBuster = ValueNotifier<int>(0);
+
+  @override
+  ValueListenable<int> get cacheBuster => _cacheBuster;
+
+  void _bustCache() {
+    _cacheBuster.value = _cacheBuster.value + 1;
+  }
 
   String _detailsKey(String id) => 'content_details_v1:$id';
 
@@ -60,6 +75,7 @@ class CachedContentRepository implements ContentRepository {
     // No cache: hit remote.
     final HomeFeedPayload net = await remote.fetchHomeFeed();
     await cache.putJson(_homeKey, net.toJson());
+    _bustCache();
     return net;
   }
 
@@ -67,6 +83,7 @@ class CachedContentRepository implements ContentRepository {
     try {
       final HomeFeedPayload net = await remote.fetchHomeFeed();
       await cache.putJson(_homeKey, net.toJson());
+      _bustCache();
     } catch (_) {
       // Best-effort refresh; ignore failures so cached UI doesn't break.
     }
@@ -78,7 +95,6 @@ class CachedContentRepository implements ContentRepository {
 
     final CacheEntry? fresh = cache.getJsonIfFresh(key, detailsTtl);
     if (fresh != null) {
-      // SWR: background refresh.
       unawaited(_refreshDetails(id: id));
       return ContentItem.fromJson(jsonDecode(fresh.json) as Map<String, dynamic>);
     }
@@ -92,6 +108,7 @@ class CachedContentRepository implements ContentRepository {
     final ContentItem? net = await remote.getById(id);
     if (net != null) {
       await cache.putJson(key, net.toJson());
+      _bustCache();
     }
     return net;
   }
@@ -101,6 +118,7 @@ class CachedContentRepository implements ContentRepository {
       final ContentItem? net = await remote.getById(id);
       if (net != null) {
         await cache.putJson(_detailsKey(id), net.toJson());
+        _bustCache();
       }
     } catch (_) {
       // Best-effort refresh only.
@@ -128,6 +146,7 @@ class CachedContentRepository implements ContentRepository {
 
     final List<ContentItem> net = await remote.search(q);
     await cache.putJson(key, _encodeSearchResults(net));
+    _bustCache();
     return net;
   }
 
@@ -135,6 +154,7 @@ class CachedContentRepository implements ContentRepository {
     try {
       final List<ContentItem> net = await remote.search(query);
       await cache.putJson(_searchKey(query), _encodeSearchResults(net));
+      _bustCache();
     } catch (_) {
       // Best-effort refresh only.
     }
@@ -150,5 +170,38 @@ class CachedContentRepository implements ContentRepository {
     return <String, dynamic>{
       'items': items.map((ContentItem e) => e.toJson()).toList(),
     };
+  }
+
+  @override
+  Future<void> recordPlaybackProgress({
+    required String contentId,
+    required int positionSeconds,
+  }) async {
+    final AppDatabase? d = db;
+    if (d == null) return;
+    await d.upsertWatchProgress(contentId: contentId, positionSeconds: positionSeconds);
+  }
+
+  @override
+  Future<void> recordPlaybackCompleted({required String contentId}) async {
+    // For now, treat completion as a progress update at 0 (or could be duration later).
+    // This keeps the API stable without requiring duration knowledge at this layer.
+    final AppDatabase? d = db;
+    if (d == null) return;
+    await d.upsertWatchProgress(contentId: contentId, positionSeconds: 0);
+  }
+
+  @override
+  Future<int?> getPlaybackProgressSeconds({required String contentId}) async {
+    final AppDatabase? d = db;
+    if (d == null) return null;
+    return d.getWatchProgressSeconds(contentId: contentId);
+  }
+
+  @override
+  Future<List<WatchHistoryEntry>> getRecentWatchHistory({int limit = 20}) async {
+    final AppDatabase? d = db;
+    if (d == null) return <WatchHistoryEntry>[];
+    return d.getRecentWatchHistory(limit: limit);
   }
 }

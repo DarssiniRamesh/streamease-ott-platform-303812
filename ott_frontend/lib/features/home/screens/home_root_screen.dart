@@ -55,7 +55,7 @@ class HomeRootScreen extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.only(bottom: 24),
                 children: <Widget>[
-                  if (c.showingStaleCache && (c.errorMessage?.isNotEmpty ?? false))
+                  if ((c.errorMessage?.isNotEmpty ?? false) && c.payload != null)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                       child: Material(

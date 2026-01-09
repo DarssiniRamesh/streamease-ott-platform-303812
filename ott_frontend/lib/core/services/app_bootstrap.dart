@@ -31,9 +31,11 @@ class AppBootstrap {
     await db.open();
 
     // Fake repository remains the source of truth; we layer a local cache on top.
+    // The cache decorator also owns write-through persistence for watch history.
     final ContentRepository repo = CachedContentRepository(
       remote: FakeContentRepository(),
       cache: cache,
+      db: db,
     );
 
     final DownloadEngine engine = FakeDownloadEngine();

@@ -4,10 +4,20 @@ import 'package:ott_frontend/data/models/content_models.dart';
 import 'package:ott_frontend/data/repositories/content_repository.dart';
 
 class AppSearchController extends ChangeNotifier {
-  AppSearchController({required this.repository, required this.cache});
+  AppSearchController({required this.repository, required this.cache}) {
+    _cacheListener = () {
+      final String q = _query.trim();
+      if (q.isEmpty) return;
+      // SWR refresh completion: re-run the search to pick up fresh cached results.
+      refreshFromCache();
+    };
+    repository.cacheBuster.addListener(_cacheListener!);
+  }
 
   final ContentRepository repository;
   final SimpleCache cache;
+
+  VoidCallback? _cacheListener;
 
   static const String _recentKey = 'recent_searches';
 
@@ -17,6 +27,9 @@ class AppSearchController extends ChangeNotifier {
   bool _loading = false;
   bool get loading => _loading;
 
+  String? _errorMessage;
+  String? get errorMessage => _errorMessage;
+
   List<ContentItem> _results = <ContentItem>[];
   List<ContentItem> get results => List<ContentItem>.unmodifiable(_results);
 
@@ -25,6 +38,7 @@ class AppSearchController extends ChangeNotifier {
   // PUBLIC_INTERFACE
   void setQuery(String value) {
     _query = value;
+    _errorMessage = null;
     notifyListeners();
   }
 
@@ -33,19 +47,22 @@ class AppSearchController extends ChangeNotifier {
     final String q = _query.trim();
     if (q.isEmpty) {
       _results = <ContentItem>[];
+      _errorMessage = null;
       notifyListeners();
       return;
     }
 
     _loading = true;
+    _errorMessage = null;
     notifyListeners();
 
     try {
-      // Repository may be cache-decorated (CachedContentRepository), enabling
-      // short TTL + stale-while-revalidate without changing controller logic.
+      // Repository is cache-decorated (CachedContentRepository):
+      // - returns cached immediately when available
+      // - triggers background refresh that will bump cacheBuster later
       final List<ContentItem> r = await repository.search(q);
 
-      // Update small cache: recent searches list.
+      // Recent searches list (small prefs cache).
       final List<String> existing = cache.getStringList(_recentKey);
       final List<String> next = <String>[q, ...existing.where((String e) => e.toLowerCase() != q.toLowerCase())]
           .take(10)
@@ -56,15 +73,31 @@ class AppSearchController extends ChangeNotifier {
       _loading = false;
       notifyListeners();
     } catch (_) {
-      _results = <ContentItem>[];
       _loading = false;
+      _results = <ContentItem>[];
+      _errorMessage = 'Search failed.';
       notifyListeners();
     }
+  }
+
+  // PUBLIC_INTERFACE
+  Future<void> refreshFromCache() async {
+    // Re-run current query; this should be instant due to cache.
+    await submit();
   }
 
   // PUBLIC_INTERFACE
   Future<void> clearRecent() async {
     await cache.setStringList(_recentKey, <String>[]);
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    final VoidCallback? l = _cacheListener;
+    if (l != null) {
+      repository.cacheBuster.removeListener(l);
+    }
+    super.dispose();
   }
 }

@@ -1,10 +1,17 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:ott_frontend/data/models/content_models.dart';
 import 'package:ott_frontend/data/repositories/content_repository.dart';
+import 'package:ott_frontend/persistence/app_database.dart';
 
 class FakeContentRepository implements ContentRepository {
   final Random _rng = Random(7);
+
+  final ValueNotifier<int> _cacheBuster = ValueNotifier<int>(0);
+
+  @override
+  ValueListenable<int> get cacheBuster => _cacheBuster;
 
   List<ContentItem> _library() {
     return <ContentItem>[
@@ -70,8 +77,16 @@ class FakeContentRepository implements ContentRepository {
     return HomeFeedPayload(
       rails: <ContentRail>[
         ContentRail(id: 'rail_continue', title: 'Continue watching', items: shuffled.take(4).toList()),
-        ContentRail(id: 'rail_trending', title: 'Trending now', items: (List<ContentItem>.of(lib)..shuffle(_rng)).take(6).toList()),
-        ContentRail(id: 'rail_recommended', title: 'Recommended for you', items: (List<ContentItem>.of(lib)..shuffle(_rng)).take(5).toList()),
+        ContentRail(
+          id: 'rail_trending',
+          title: 'Trending now',
+          items: (List<ContentItem>.of(lib)..shuffle(_rng)).take(6).toList(),
+        ),
+        ContentRail(
+          id: 'rail_recommended',
+          title: 'Recommended for you',
+          items: (List<ContentItem>.of(lib)..shuffle(_rng)).take(5).toList(),
+        ),
       ],
     );
   }
@@ -95,5 +110,28 @@ class FakeContentRepository implements ContentRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  @override
+  Future<void> recordPlaybackProgress({
+    required String contentId,
+    required int positionSeconds,
+  }) async {
+    // No-op in the pure fake repository.
+  }
+
+  @override
+  Future<void> recordPlaybackCompleted({required String contentId}) async {
+    // No-op in the pure fake repository.
+  }
+
+  @override
+  Future<int?> getPlaybackProgressSeconds({required String contentId}) async {
+    return null;
+  }
+
+  @override
+  Future<List<WatchHistoryEntry>> getRecentWatchHistory({int limit = 20}) async {
+    return <WatchHistoryEntry>[];
   }
 }

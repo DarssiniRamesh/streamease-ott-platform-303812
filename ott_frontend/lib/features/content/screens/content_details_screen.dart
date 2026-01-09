@@ -1,120 +1,107 @@
 import 'package:flutter/material.dart';
 import 'package:ott_frontend/core/i18n/app_localizations.dart';
 import 'package:ott_frontend/core/services/app_bootstrap.dart';
-import 'package:ott_frontend/data/models/content_models.dart';
-import 'package:ott_frontend/data/repositories/content_repository.dart';
+import 'package:ott_frontend/features/content/controllers/content_details_controller.dart';
 import 'package:ott_frontend/features/downloads/controllers/download_controller.dart';
 import 'package:provider/provider.dart';
 
-class ContentDetailsScreen extends StatefulWidget {
+class ContentDetailsScreen extends StatelessWidget {
   const ContentDetailsScreen({super.key, required this.contentId});
 
   final String contentId;
 
   @override
-  State<ContentDetailsScreen> createState() => _ContentDetailsScreenState();
-}
-
-class _ContentDetailsScreenState extends State<ContentDetailsScreen> {
-  bool _loading = true;
-  ContentItem? _item;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    // Avoid context usage after await: pull deps synchronously before awaiting.
-    final AppDependencies deps = context.read<AppDependencies>();
-    final ContentRepository repo = deps.contentRepository;
-
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    try {
-      final ContentItem? item = await repo.getById(widget.contentId);
-      setState(() {
-        _item = item;
-        _loading = false;
-      });
-    } catch (_) {
-      setState(() {
-        _error = 'Failed to load content.';
-        _loading = false;
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final AppLocalizations t = AppLocalizations.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(_item?.title ?? 'Content')),
-      body: SafeArea(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : (_error != null)
-                ? Center(child: Text(_error!))
-                : _item == null
-                    ? const Center(child: Text('Not found.'))
-                    : ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+    // Pull deps synchronously; avoid context usage after async gaps elsewhere.
+    final AppDependencies deps = context.read<AppDependencies>();
+
+    return ChangeNotifierProvider<ContentDetailsController>(
+      create: (_) => ContentDetailsController(
+        repository: deps.contentRepository,
+        contentId: contentId,
+      )..load(),
+      child: Consumer<ContentDetailsController>(
+        builder: (BuildContext context, ContentDetailsController c, _) {
+          return Scaffold(
+            appBar: AppBar(title: Text(c.item?.title ?? 'Content')),
+            body: SafeArea(
+              child: switch (c.state) {
+                ContentDetailsState.loading => const Center(child: CircularProgressIndicator()),
+                ContentDetailsState.error => Center(child: Text(c.errorMessage ?? 'Failed to load content.')),
+                ContentDetailsState.notFound => const Center(child: Text('Not found.')),
+                ContentDetailsState.ready => ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                    children: <Widget>[
+                      if ((c.errorMessage?.isNotEmpty ?? false) && c.item != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Material(
+                            color: Theme.of(context).colorScheme.secondary.withAlpha(25),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(c.errorMessage!),
+                            ),
+                          ),
+                        ),
+                      _PosterPlaceholder(title: c.item!.title),
+                      const SizedBox(height: 12),
+                      Text(
+                        c.item!.title,
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(c.item!.description),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: c.item!.genres.map((String g) => Chip(label: Text(g))).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
                         children: <Widget>[
-                          _PosterPlaceholder(title: _item!.title),
-                          const SizedBox(height: 12),
-                          Text(
-                            _item!.title,
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                // Playback seam (still not implemented) but we can
+                                // write-through an initial watch position.
+                                c.recordPlaybackProgressSeconds(30);
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Playback not implemented yet.')),
+                                );
+                              },
+                              icon: const Icon(Icons.play_arrow),
+                              label: const Text('Play'),
+                            ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(_item!.description),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _item!.genres.map((String g) => Chip(label: Text(g))).toList(),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: FilledButton.icon(
-                                  onPressed: () {
-                                    // Playback seam (not implemented yet).
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Playback not implemented yet.')),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                context.read<DownloadController>().enqueue(
+                                      contentId: c.item!.id,
+                                      title: c.item!.title,
                                     );
-                                  },
-                                  icon: const Icon(Icons.play_arrow),
-                                  label: const Text('Play'),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () {
-                                    context.read<DownloadController>().enqueue(
-                                          contentId: _item!.id,
-                                          title: _item!.title,
-                                        );
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Added to downloads.')),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.download),
-                                  label: Text(t.enqueueDownload),
-                                ),
-                              ),
-                            ],
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Added to downloads.')),
+                                );
+                              },
+                              icon: const Icon(Icons.download),
+                              label: Text(t.enqueueDownload),
+                            ),
                           ),
                         ],
                       ),
+                    ],
+                  ),
+              },
+            ),
+          );
+        },
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ott_frontend/app.dart';
 import 'package:ott_frontend/core/services/app_bootstrap.dart';
 import 'package:ott_frontend/core/services/test_config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_helper.dart';
 
@@ -11,9 +12,16 @@ void main() {
     initSqfliteFfiForTests();
   });
 
-  testWidgets('App boots and shows bottom navigation', (WidgetTester tester) async {
+  setUp(() {
+    // Ensure background work is disabled for every widget test, even if a prior
+    // test failed before it could reset.
     TestConfig.disableAutoStart = true;
 
+    // Must be initialized before any SharedPreferences.getInstance() calls.
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  testWidgets('App boots and shows bottom navigation', (WidgetTester tester) async {
     final AppDependencies deps = await AppBootstrap.bootstrap();
 
     addTearDown(() async {
@@ -21,10 +29,14 @@ void main() {
       TestConfig.reset();
 
       // Dispose widget tree first so providers/controllers cancel debounces/listeners.
+      // This includes a final unmount to a const SizedBox() + bounded pumps.
       await unmountWidgetTree(tester);
 
       // Then close DB / cancel any download timers.
       await disposeAppDependencies(deps);
+
+      // Extra bounded pumps to ensure the tree is truly idle after disposal.
+      await pumpFrames(tester, count: 40, step: const Duration(milliseconds: 16));
 
       // After teardown there should be no scheduled frames.
       expect(
@@ -36,11 +48,12 @@ void main() {
 
     await tester.pumpWidget(StreamEaseApp(deps: deps));
 
-    // Allow initial layout to complete; bounded + asserted idle.
-    await pumpAndSettleBounded(
-      tester,
-      timeout: const Duration(seconds: 1),
-      assertNoScheduledFrames: true,
+    // Explicit bounded pumps instead of any settle heuristic.
+    await pumpFrames(tester, count: 40, step: const Duration(milliseconds: 16));
+    expect(
+      tester.binding.hasScheduledFrame,
+      isFalse,
+      reason: 'App left scheduled frames behind after initial boot pumps.',
     );
 
     expect(find.text('Home'), findsOneWidget);

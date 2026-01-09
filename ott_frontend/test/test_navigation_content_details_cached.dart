@@ -61,10 +61,16 @@ void main() {
     initSqfliteFfiForTests();
   });
 
-  testWidgets('Navigates to ContentDetails and renders immediately from cached details', (WidgetTester tester) async {
+  setUp(() {
+    // Ensure background work is disabled for every widget test, even if a prior
+    // test failed before it could reset.
     TestConfig.disableAutoStart = true;
 
+    // Must be initialized before any SharedPreferences.getInstance() calls.
     SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  testWidgets('Navigates to ContentDetails and renders immediately from cached details', (WidgetTester tester) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final SimpleCache cache = SimpleCache(prefs: prefs);
 
@@ -95,11 +101,15 @@ void main() {
       TestConfig.reset();
 
       // Tear down widget tree first to dispose providers/controllers.
+      // (Includes a final unmount to const SizedBox() + bounded pumps.)
       await unmountWidgetTree(tester);
 
       // Cancel any active timers and close DB.
       await engine.cancelAll();
       await db.close();
+
+      // Extra bounded pumps to ensure the tree is truly idle after disposal.
+      await pumpFrames(tester, count: 40, step: const Duration(milliseconds: 16));
 
       expect(
         tester.binding.hasScheduledFrame,
@@ -116,31 +126,36 @@ void main() {
     );
 
     await tester.pumpWidget(StreamEaseApp(deps: deps));
-    await pumpAndSettleBounded(
-      tester,
-      timeout: const Duration(seconds: 1),
-      assertNoScheduledFrames: true,
+
+    // Explicit bounded pumps instead of any settle heuristic.
+    await pumpFrames(tester, count: 40, step: const Duration(milliseconds: 16));
+    expect(
+      tester.binding.hasScheduledFrame,
+      isFalse,
+      reason: 'App left scheduled frames behind after initial boot pumps.',
     );
 
     // Ensure we are on a stable initial frame before navigation.
     await tester.tap(find.text('Home'));
-    await pumpAndSettleBounded(
-      tester,
-      timeout: const Duration(milliseconds: 800),
-      assertNoScheduledFrames: true,
+    await tester.pump();
+    await pumpFrames(tester, count: 40, step: const Duration(milliseconds: 16));
+    expect(
+      tester.binding.hasScheduledFrame,
+      isFalse,
+      reason: 'Tap/navigation left scheduled frames behind after bounded pumps.',
     );
 
-    // Navigate using NavigatorState.pushNamed, but keep pumping bounded (never
-    // wait for an unbounded settle).
+    // Navigate using NavigatorState.pushNamed, but keep pumping bounded.
     tester.state<NavigatorState>(find.byType(Navigator)).pushNamed(
           AppRoutes.contentDetails,
           arguments: const ContentDetailsArgs(contentId: 'm1'),
         );
     await tester.pump();
-    await pumpAndSettleBounded(
-      tester,
-      timeout: const Duration(milliseconds: 800),
-      assertNoScheduledFrames: true,
+    await pumpFrames(tester, count: 40, step: const Duration(milliseconds: 16));
+    expect(
+      tester.binding.hasScheduledFrame,
+      isFalse,
+      reason: 'Route push left scheduled frames behind after bounded pumps.',
     );
 
     // Cached title should be rendered without waiting 2 seconds for remote.

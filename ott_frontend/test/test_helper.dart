@@ -144,14 +144,19 @@ Future<void> pumpUntilNoScheduledFrames(
   // Always pump at least once.
   await tester.pump(step);
 
+  int pumps = 0;
   while (tester.binding.hasScheduledFrame && sw.elapsed < timeout) {
+    pumps++;
     await tester.pump(step);
   }
 
+  // Minimal diagnostics to fail fast instead of hanging without context.
   expect(
     tester.binding.hasScheduledFrame,
     isFalse,
-    reason: '$reason Timeout after ${timeout.inMilliseconds}ms.',
+    reason: '$reason Timeout after ${timeout.inMilliseconds}ms. '
+        'Pumped $pumps times; a periodic Timer, animation, stream, or SWR refresh '
+        'may still be running.',
   );
 }
 
@@ -175,7 +180,7 @@ Future<void> disposeAppDependencies(AppDependencies deps) async {
   /// Best-effort cleanup for widget tests to avoid keeping the isolate alive.
   ///
   /// - Cancel any active download timers (FakeDownloadEngine)
-  /// - Close SQLite handle
+  /// - Close SQLite handle (if opened)
   final Object engine = deps.downloadEngine;
 
   // Prefer a full timer cancellation when available (FakeDownloadEngine).
@@ -191,5 +196,8 @@ Future<void> disposeAppDependencies(AppDependencies deps) async {
     await deps.downloadEngine.cancel(contentId: 'm4');
   }
 
+  // If auto-start was disabled, bootstrap may have returned an AppDatabase that
+  // was never opened. Close is safe/idempotent, but we keep this comment as a
+  // reminder that tests must explicitly open DB when they need it.
   await deps.appDatabase.close();
 }

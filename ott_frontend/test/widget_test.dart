@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'test_helper.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUpAll(() {
     // Must occur before any AppDatabase.open calls (AppBootstrap.bootstrap opens SQLite).
     initSqfliteFfiForTests();

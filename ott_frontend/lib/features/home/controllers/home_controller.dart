@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:ott_frontend/core/services/test_config.dart';
 import 'package:ott_frontend/data/models/content_models.dart';
 import 'package:ott_frontend/data/repositories/content_repository.dart';
 import 'package:ott_frontend/features/home/controllers/home_view_models.dart';
@@ -79,7 +80,12 @@ class HomeController extends ChangeNotifier {
 
       // Kick off continue watching load after we have *some* UI; this is DB-backed,
       // and details are cache-first via repository.getById().
-      unawaited(loadContinueWatching());
+      //
+      // In widget tests, auto-start is disabled to prevent background work from
+      // continuously scheduling frames.
+      if (!TestConfig.disableAutoStart) {
+        unawaited(loadContinueWatching());
+      }
     } catch (_) {
       if (_disposed) return;
 
@@ -169,7 +175,12 @@ class HomeController extends ChangeNotifier {
 
     // Also refresh continue-watching so updated cached details show up, but don't
     // make it block the rails.
-    unawaited(loadContinueWatching());
+    //
+    // In widget tests, auto-start is disabled to prevent background work from
+    // continuously scheduling frames.
+    if (!TestConfig.disableAutoStart) {
+      unawaited(loadContinueWatching());
+    }
   }
 
   @override

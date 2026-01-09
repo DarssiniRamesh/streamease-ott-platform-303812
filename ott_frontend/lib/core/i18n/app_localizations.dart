@@ -45,7 +45,8 @@ class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> 
   const _AppLocalizationsDelegate();
 
   @override
-  bool isSupported(Locale locale) => supportedLocales.any((Locale l) => l.languageCode == locale.languageCode);
+  bool isSupported(Locale locale) =>
+      AppLocalizations.supportedLocales.any((Locale l) => l.languageCode == locale.languageCode);
 
   @override
   Future<AppLocalizations> load(Locale locale) => SynchronousFuture<AppLocalizations>(AppLocalizations(locale));

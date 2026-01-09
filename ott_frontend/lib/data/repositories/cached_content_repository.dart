@@ -1,0 +1,154 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:ott_frontend/core/services/simple_cache.dart';
+import 'package:ott_frontend/data/models/content_models.dart';
+import 'package:ott_frontend/data/repositories/content_repository.dart';
+
+/// A minimal cache decorator for the content repository.
+///
+/// This keeps the app architecture intact (controllers still depend on
+/// `ContentRepository`) while enabling a SharedPreferences/TTL cache for
+/// fast-path reads, plus stale-while-revalidate behavior.
+///
+/// Caching strategy:
+/// - Home feed: TTL + stale fallback + background refresh (SWR).
+/// - Content details: TTL + stale fallback + background refresh (SWR).
+/// - Search results (optional): short TTL cache per normalized query.
+///   (Recents are handled by `AppSearchController`.)
+class CachedContentRepository implements ContentRepository {
+  CachedContentRepository({
+    required this.remote,
+    required this.cache,
+    this.homeTtl = const Duration(minutes: 10),
+    this.detailsTtl = const Duration(hours: 6),
+    this.searchTtl = const Duration(minutes: 2),
+  });
+
+  final ContentRepository remote;
+  final SimpleCache cache;
+
+  final Duration homeTtl;
+  final Duration detailsTtl;
+  final Duration searchTtl;
+
+  static const String _homeKey = 'home_feed_v1';
+
+  String _detailsKey(String id) => 'content_details_v1:$id';
+
+  /// We normalize searches so the same query maps to the same key.
+  String _searchKey(String query) => 'search_results_v1:${_normalizeQuery(query)}';
+
+  String _normalizeQuery(String query) => query.trim().toLowerCase();
+
+  @override
+  Future<HomeFeedPayload> fetchHomeFeed() async {
+    final CacheEntry? fresh = cache.getJsonIfFresh(_homeKey, homeTtl);
+    if (fresh != null) {
+      // SWR: return immediately and refresh in background.
+      unawaited(_refreshHomeFeed());
+      return HomeFeedPayload.fromJson(jsonDecode(fresh.json) as Map<String, dynamic>);
+    }
+
+    final CacheEntry? stale = cache.getJsonEvenIfStale(_homeKey);
+    if (stale != null) {
+      // Stale fallback + background refresh.
+      unawaited(_refreshHomeFeed());
+      return HomeFeedPayload.fromJson(jsonDecode(stale.json) as Map<String, dynamic>);
+    }
+
+    // No cache: hit remote.
+    final HomeFeedPayload net = await remote.fetchHomeFeed();
+    await cache.putJson(_homeKey, net.toJson());
+    return net;
+  }
+
+  Future<void> _refreshHomeFeed() async {
+    try {
+      final HomeFeedPayload net = await remote.fetchHomeFeed();
+      await cache.putJson(_homeKey, net.toJson());
+    } catch (_) {
+      // Best-effort refresh; ignore failures so cached UI doesn't break.
+    }
+  }
+
+  @override
+  Future<ContentItem?> getById(String id) async {
+    final String key = _detailsKey(id);
+
+    final CacheEntry? fresh = cache.getJsonIfFresh(key, detailsTtl);
+    if (fresh != null) {
+      // SWR: background refresh.
+      unawaited(_refreshDetails(id: id));
+      return ContentItem.fromJson(jsonDecode(fresh.json) as Map<String, dynamic>);
+    }
+
+    final CacheEntry? stale = cache.getJsonEvenIfStale(key);
+    if (stale != null) {
+      unawaited(_refreshDetails(id: id));
+      return ContentItem.fromJson(jsonDecode(stale.json) as Map<String, dynamic>);
+    }
+
+    final ContentItem? net = await remote.getById(id);
+    if (net != null) {
+      await cache.putJson(key, net.toJson());
+    }
+    return net;
+  }
+
+  Future<void> _refreshDetails({required String id}) async {
+    try {
+      final ContentItem? net = await remote.getById(id);
+      if (net != null) {
+        await cache.putJson(_detailsKey(id), net.toJson());
+      }
+    } catch (_) {
+      // Best-effort refresh only.
+    }
+  }
+
+  @override
+  Future<List<ContentItem>> search(String query) async {
+    // Optional short-lived caching for repeated queries.
+    final String q = query.trim();
+    if (q.isEmpty) return <ContentItem>[];
+
+    final String key = _searchKey(q);
+    final CacheEntry? fresh = cache.getJsonIfFresh(key, searchTtl);
+    if (fresh != null) {
+      unawaited(_refreshSearch(query: q));
+      return _decodeSearchResults(fresh.json);
+    }
+
+    final CacheEntry? stale = cache.getJsonEvenIfStale(key);
+    if (stale != null) {
+      unawaited(_refreshSearch(query: q));
+      return _decodeSearchResults(stale.json);
+    }
+
+    final List<ContentItem> net = await remote.search(q);
+    await cache.putJson(key, _encodeSearchResults(net));
+    return net;
+  }
+
+  Future<void> _refreshSearch({required String query}) async {
+    try {
+      final List<ContentItem> net = await remote.search(query);
+      await cache.putJson(_searchKey(query), _encodeSearchResults(net));
+    } catch (_) {
+      // Best-effort refresh only.
+    }
+  }
+
+  List<ContentItem> _decodeSearchResults(String json) {
+    final Map<String, dynamic> decoded = jsonDecode(json) as Map<String, dynamic>;
+    final List<dynamic> raw = (decoded['items'] as List<dynamic>?) ?? const <dynamic>[];
+    return raw.map((dynamic e) => ContentItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Map<String, dynamic> _encodeSearchResults(List<ContentItem> items) {
+    return <String, dynamic>{
+      'items': items.map((ContentItem e) => e.toJson()).toList(),
+    };
+  }
+}

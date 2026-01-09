@@ -1,4 +1,5 @@
 import 'package:ott_frontend/core/services/simple_cache.dart';
+import 'package:ott_frontend/data/repositories/cached_content_repository.dart';
 import 'package:ott_frontend/data/repositories/content_repository.dart';
 import 'package:ott_frontend/data/repositories/fake_content_repository.dart';
 import 'package:ott_frontend/features/downloads/services/download_engine.dart';
@@ -29,7 +30,12 @@ class AppBootstrap {
     final AppDatabase db = AppDatabase();
     await db.open();
 
-    final ContentRepository repo = FakeContentRepository();
+    // Fake repository remains the source of truth; we layer a local cache on top.
+    final ContentRepository repo = CachedContentRepository(
+      remote: FakeContentRepository(),
+      cache: cache,
+    );
+
     final DownloadEngine engine = FakeDownloadEngine();
 
     return AppDependencies(

@@ -41,9 +41,11 @@ class AppSearchController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Repository may be cache-decorated (CachedContentRepository), enabling
+      // short TTL + stale-while-revalidate without changing controller logic.
       final List<ContentItem> r = await repository.search(q);
 
-      // Update small cache.
+      // Update small cache: recent searches list.
       final List<String> existing = cache.getStringList(_recentKey);
       final List<String> next = <String>[q, ...existing.where((String e) => e.toLowerCase() != q.toLowerCase())]
           .take(10)

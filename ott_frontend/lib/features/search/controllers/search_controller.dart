@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:ott_frontend/core/services/simple_cache.dart';
+import 'package:ott_frontend/core/services/test_config.dart';
 import 'package:ott_frontend/data/models/content_models.dart';
 import 'package:ott_frontend/data/repositories/content_repository.dart';
 import 'package:ott_frontend/persistence/app_database.dart';
@@ -11,6 +12,10 @@ class AppSearchController extends ChangeNotifier {
     this.db,
   }) {
     _cacheListener = () {
+      // In widget tests we disable auto-start to avoid any SWR-driven background
+      // work that can keep scheduling frames and cause hangs.
+      if (TestConfig.disableAutoStart) return;
+
       final String q = _query.trim();
       if (q.isEmpty) return;
 

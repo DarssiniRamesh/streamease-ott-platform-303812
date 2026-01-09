@@ -97,9 +97,89 @@ CREATE TABLE watch_history (
     return rows.first['position_seconds'] as int?;
   }
 
+  /// Returns recent watch history ordered by most recently updated.
+  ///
+  /// Useful to drive a "Continue watching" rail without requiring network calls.
+  /// The caller can join this with content details via `ContentRepository.getById`.
+  // PUBLIC_INTERFACE
+  Future<List<WatchHistoryEntry>> getRecentWatchHistory({int limit = 20}) async {
+    final List<Map<String, Object?>> rows = await db.query(
+      'watch_history',
+      orderBy: 'updated_at_ms DESC',
+      limit: limit,
+    );
+
+    return rows
+        .map(
+          (Map<String, Object?> r) => WatchHistoryEntry(
+            contentId: (r['content_id'] as String?) ?? '',
+            positionSeconds: (r['position_seconds'] as int?) ?? 0,
+            updatedAtMs: (r['updated_at_ms'] as int?) ?? 0,
+          ),
+        )
+        .where((WatchHistoryEntry e) => e.contentId.isNotEmpty)
+        .toList();
+  }
+
+  /// Ensures the single-row download queue state exists and returns whether the
+  /// queue is currently paused.
+  // PUBLIC_INTERFACE
+  Future<bool> getDownloadQueuePaused() async {
+    final List<Map<String, Object?>> rows = await db.query(
+      'download_queue',
+      where: 'id = 1',
+      limit: 1,
+    );
+
+    if (rows.isEmpty) {
+      await db.insert(
+        'download_queue',
+        <String, Object?>{
+          'id': 1,
+          'paused': 0,
+          'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      return false;
+    }
+
+    return ((rows.first['paused'] as int?) ?? 0) == 1;
+  }
+
+  /// Writes the single-row download queue paused state (durable).
+  // PUBLIC_INTERFACE
+  Future<void> setDownloadQueuePaused(bool paused) async {
+    final int now = DateTime.now().millisecondsSinceEpoch;
+
+    // Use insert+replace to guarantee the row exists even if schema was created
+    // but the seed insert failed on some devices.
+    await db.insert(
+      'download_queue',
+      <String, Object?>{
+        'id': 1,
+        'paused': paused ? 1 : 0,
+        'updated_at_ms': now,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
   // PUBLIC_INTERFACE
   Future<void> close() async {
     await _db?.close();
     _db = null;
   }
+}
+
+class WatchHistoryEntry {
+  WatchHistoryEntry({
+    required this.contentId,
+    required this.positionSeconds,
+    required this.updatedAtMs,
+  });
+
+  final String contentId;
+  final int positionSeconds;
+  final int updatedAtMs;
 }

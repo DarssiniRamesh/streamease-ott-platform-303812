@@ -25,7 +25,6 @@ class StreamEaseApp extends StatelessWidget {
         ChangeNotifierProvider<HomeController>(
           create: (_) => HomeController(
             repository: deps.contentRepository,
-            cache: deps.simpleCache,
           )..loadHomeFeed(),
         ),
         ChangeNotifierProvider<AppSearchController>(

@@ -100,6 +100,35 @@ Future<void> pumpAndSettleBounded(
 }
 
 /// PUBLIC_INTERFACE
+Future<void> pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 2),
+  Duration step = const Duration(milliseconds: 20),
+}) async {
+  /// Pumps frames until [finder] is found or [timeout] is reached.
+  ///
+  /// This is safer than `pumpAndSettle()` and avoids asserting global idleness
+  /// (which may never happen due to implicit animations like ink reactions).
+  final Stopwatch sw = Stopwatch()..start();
+
+  // Ensure at least one layout pass.
+  await tester.pump(step);
+
+  while (sw.elapsed < timeout) {
+    if (finder.evaluate().isNotEmpty) return;
+    await tester.pump(step);
+  }
+
+  // Provide a useful failure message.
+  expect(
+    finder,
+    findsOneWidget,
+    reason: 'pumpUntilFound timed out after ${timeout.inMilliseconds}ms.',
+  );
+}
+
+/// PUBLIC_INTERFACE
 Future<void> unmountWidgetTree(WidgetTester tester) async {
   /// Unmounts any current widget tree and pumps a bounded settle.
   ///

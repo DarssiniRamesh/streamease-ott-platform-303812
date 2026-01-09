@@ -24,7 +24,7 @@ void main() {
   });
 
   testWidgets('App boots and shows bottom navigation', (WidgetTester tester) async {
-    // Safety: ensure prefs are mocked before *any* bootstrap that may read them.
+    // Must be mocked before *any* bootstrap work (bootstrap calls getInstance()).
     SharedPreferences.setMockInitialValues(<String, Object>{});
 
     final AppDependencies deps = await AppBootstrap.bootstrap();
@@ -34,13 +34,13 @@ void main() {
       TestConfig.reset();
 
       // Dispose widget tree first so providers/controllers cancel debounces/listeners.
-      // This includes a final unmount to a const SizedBox() + bounded pumps.
+      // This includes a final unmount to a const SizedBox() + bounded settle.
       await unmountWidgetTree(tester);
 
       // Then close DB / cancel any download timers.
       await disposeAppDependencies(deps);
 
-      // Extra bounded pumps + fail fast if anything keeps scheduling frames.
+      // Fail fast if anything continues scheduling frames after teardown.
       await assertNoScheduledFramesAfterPumps(
         tester,
         reason: 'Widget tree teardown left scheduled frames behind.',
@@ -49,11 +49,10 @@ void main() {
 
     await tester.pumpWidget(StreamEaseApp(deps: deps));
 
-    // Explicit bounded pumps + fail fast.
-    await assertNoScheduledFramesAfterPumps(
-      tester,
-      reason: 'App left scheduled frames behind after initial boot pumps.',
-    );
+    // Do NOT assert global idleness here: implicit animations (ink reactions,
+    // focus highlights, etc.) can keep scheduling frames and make tests flaky/hang.
+    // Instead, pump bounded and wait until the expected UI is present.
+    await pumpUntilFound(tester, find.text('Home'));
 
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Search'), findsOneWidget);

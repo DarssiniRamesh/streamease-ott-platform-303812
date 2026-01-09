@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ott_frontend/core/services/app_bootstrap.dart';
+import 'package:ott_frontend/features/downloads/services/fake_download_engine.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// PUBLIC_INTERFACE
@@ -31,13 +32,21 @@ Future<void> pumpAndSettleBounded(
 Future<void> disposeAppDependencies(AppDependencies deps) async {
   /// Best-effort cleanup for widget tests to avoid keeping the isolate alive.
   ///
+  /// - Cancel any active download timers (FakeDownloadEngine)
   /// - Close SQLite handle
-  /// - Cancel any active download timers (when using FakeDownloadEngine)
+  // Prefer a full timer cancellation when available (FakeDownloadEngine).
+  final Object engine = deps.downloadEngine;
+  if (engine is FakeDownloadEngine) {
+    await engine.cancelAll();
+  }
+
+  // Backwards-compatible best-effort cancels for known IDs.
   await deps.downloadEngine.cancel(contentId: 'm1');
   await deps.downloadEngine.cancel(contentId: 'm2');
   await deps.downloadEngine.cancel(contentId: 'm3');
   await deps.downloadEngine.cancel(contentId: 's1e1');
   await deps.downloadEngine.cancel(contentId: 's1e2');
   await deps.downloadEngine.cancel(contentId: 'm4');
+
   await deps.appDatabase.close();
 }

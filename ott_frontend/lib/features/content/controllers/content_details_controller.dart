@@ -14,6 +14,10 @@ class ContentDetailsController extends ChangeNotifier {
     this.db,
   }) {
     _cacheListener = () {
+      // Cache-buster callbacks may still fire after widget disposal if the
+      // repository refresh completes late. Guard to avoid notify after dispose.
+      if (_disposed) return;
+
       // Re-load from cache when SWR refresh completes.
       refreshFromCache();
     };
@@ -45,6 +49,13 @@ class ContentDetailsController extends ChangeNotifier {
 
   bool _inFlight = false;
 
+  bool _disposed = false;
+
+  void _notifyIfAlive() {
+    if (_disposed) return;
+    notifyListeners();
+  }
+
   int? _lastWatchedSeconds;
   int? get lastWatchedSeconds => _lastWatchedSeconds;
 
@@ -61,21 +72,24 @@ class ContentDetailsController extends ChangeNotifier {
 
   // PUBLIC_INTERFACE
   Future<void> load() async {
+    if (_disposed) return;
     if (_inFlight) return;
     _inFlight = true;
 
     _errorMessage = null;
     _refreshing = _hasEverLoaded;
     _state = _hasEverLoaded ? _state : ContentDetailsState.loading;
-    notifyListeners();
+    _notifyIfAlive();
 
     try {
       // Fetch cached (or stale) details immediately; refresh happens in background.
       final ContentItem? it = await repository.getById(contentId);
+      if (_disposed) return;
       _item = it;
 
       // Load watch progress from DB (best-effort; cache-decorated repo uses SQLite).
       _lastWatchedSeconds = await repository.getPlaybackProgressSeconds(contentId: contentId);
+      if (_disposed) return;
 
       // Load watchlist membership from preferences cache.
       _inWatchlist = _isInWatchlist(contentId);
@@ -84,7 +98,9 @@ class ContentDetailsController extends ChangeNotifier {
       final AppDatabase? d = db;
       if (d != null) {
         _hasDownload = await d.hasDownload(contentId: contentId);
+        if (_disposed) return;
         _downloadStatus = await d.getDownloadStatus(contentId: contentId);
+        if (_disposed) return;
       } else {
         _hasDownload = false;
         _downloadStatus = null;
@@ -99,20 +115,22 @@ class ContentDetailsController extends ChangeNotifier {
       _refreshing = false;
       _hasEverLoaded = true;
       _inFlight = false;
-      notifyListeners();
+      _notifyIfAlive();
     } catch (_) {
+      if (_disposed) return;
+
       _refreshing = false;
       _inFlight = false;
 
       if (_item != null) {
         _errorMessage = 'Failed to refresh content.';
-        notifyListeners();
+        _notifyIfAlive();
         return;
       }
 
       _state = ContentDetailsState.error;
       _errorMessage = 'Failed to load content.';
-      notifyListeners();
+      _notifyIfAlive();
     }
   }
 
@@ -123,6 +141,8 @@ class ContentDetailsController extends ChangeNotifier {
 
   // PUBLIC_INTERFACE
   Future<void> toggleWatchlist() async {
+    if (_disposed) return;
+
     final List<String> existing = cache.getStringList(_watchlistKey);
     final List<String> next = List<String>.of(existing);
 
@@ -135,7 +155,7 @@ class ContentDetailsController extends ChangeNotifier {
     }
 
     await cache.setStringList(_watchlistKey, next.take(200).toList());
-    notifyListeners();
+    _notifyIfAlive();
   }
 
   // PUBLIC_INTERFACE
@@ -163,14 +183,17 @@ class ContentDetailsController extends ChangeNotifier {
   /// `watch_history` table in SQLite when available).
   // PUBLIC_INTERFACE
   Future<void> updateProgressSeconds(int positionSeconds) async {
+    if (_disposed) return;
+
     await repository.recordPlaybackProgress(
       contentId: contentId,
       positionSeconds: positionSeconds,
     );
+    if (_disposed) return;
 
     // Keep UI in sync with persisted position.
     _lastWatchedSeconds = positionSeconds;
-    notifyListeners();
+    _notifyIfAlive();
   }
 
   // PUBLIC_INTERFACE
@@ -181,22 +204,30 @@ class ContentDetailsController extends ChangeNotifier {
 
   // PUBLIC_INTERFACE
   Future<void> recordPlaybackCompleted() async {
+    if (_disposed) return;
+
     await repository.recordPlaybackCompleted(contentId: contentId);
+    if (_disposed) return;
+
     _lastWatchedSeconds = 0;
-    notifyListeners();
+    _notifyIfAlive();
   }
 
   // PUBLIC_INTERFACE
   void markDownloadEnqueuedLocally() {
+    if (_disposed) return;
+
     // Used by UI right after enqueue to reflect state immediately without
     // waiting for DB reload / navigation.
     _hasDownload = true;
     _downloadStatus = 'downloading';
-    notifyListeners();
+    _notifyIfAlive();
   }
 
   @override
   void dispose() {
+    _disposed = true;
+
     final VoidCallback? l = _cacheListener;
     if (l != null) {
       repository.cacheBuster.removeListener(l);

@@ -89,7 +89,7 @@ void main() {
 
     addTearDown(() async {
       // Tear down widget tree first to dispose providers/controllers.
-      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(const SizedBox());
       await pumpAndSettleBounded(tester);
 
       // Cancel any active timers and close DB.

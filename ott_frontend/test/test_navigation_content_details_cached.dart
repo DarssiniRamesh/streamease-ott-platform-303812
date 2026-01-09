@@ -6,6 +6,7 @@ import 'package:ott_frontend/core/routing/app_routes.dart';
 import 'package:ott_frontend/core/routing/app_router.dart';
 import 'package:ott_frontend/core/services/app_bootstrap.dart';
 import 'package:ott_frontend/core/services/simple_cache.dart';
+import 'package:ott_frontend/core/services/test_config.dart';
 import 'package:ott_frontend/data/models/content_models.dart';
 import 'package:ott_frontend/data/repositories/cached_content_repository.dart';
 import 'package:ott_frontend/data/repositories/content_repository.dart';
@@ -61,6 +62,8 @@ void main() {
   });
 
   testWidgets('Navigates to ContentDetails and renders immediately from cached details', (WidgetTester tester) async {
+    TestConfig.disableAutoStart = true;
+
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final SimpleCache cache = SimpleCache(prefs: prefs);
@@ -88,12 +91,21 @@ void main() {
     final FakeDownloadEngine engine = FakeDownloadEngine();
 
     addTearDown(() async {
+      // Reset test config first (so later tests start clean).
+      TestConfig.reset();
+
       // Tear down widget tree first to dispose providers/controllers.
       await unmountWidgetTree(tester);
 
       // Cancel any active timers and close DB.
       await engine.cancelAll();
       await db.close();
+
+      expect(
+        tester.binding.hasScheduledFrame,
+        isFalse,
+        reason: 'Widget tree teardown left scheduled frames behind.',
+      );
     });
 
     final AppDependencies deps = AppDependencies(
@@ -104,11 +116,19 @@ void main() {
     );
 
     await tester.pumpWidget(StreamEaseApp(deps: deps));
-    await pumpAndSettleBounded(tester, timeout: const Duration(seconds: 1));
+    await pumpAndSettleBounded(
+      tester,
+      timeout: const Duration(seconds: 1),
+      assertNoScheduledFrames: true,
+    );
 
     // Ensure we are on a stable initial frame before navigation.
     await tester.tap(find.text('Home'));
-    await pumpAndSettleBounded(tester, timeout: const Duration(milliseconds: 800));
+    await pumpAndSettleBounded(
+      tester,
+      timeout: const Duration(milliseconds: 800),
+      assertNoScheduledFrames: true,
+    );
 
     // Navigate using NavigatorState.pushNamed, but keep pumping bounded (never
     // wait for an unbounded settle).
@@ -117,7 +137,11 @@ void main() {
           arguments: const ContentDetailsArgs(contentId: 'm1'),
         );
     await tester.pump();
-    await pumpAndSettleBounded(tester, timeout: const Duration(milliseconds: 800));
+    await pumpAndSettleBounded(
+      tester,
+      timeout: const Duration(milliseconds: 800),
+      assertNoScheduledFrames: true,
+    );
 
     // Cached title should be rendered without waiting 2 seconds for remote.
     expect(find.text('Cached Title'), findsWidgets);

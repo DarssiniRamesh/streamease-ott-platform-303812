@@ -4,6 +4,7 @@ import 'package:ott_frontend/core/i18n/app_localizations.dart';
 import 'package:ott_frontend/core/routing/app_router.dart';
 import 'package:ott_frontend/core/routing/app_shell.dart';
 import 'package:ott_frontend/core/services/app_bootstrap.dart';
+import 'package:ott_frontend/core/services/test_config.dart';
 import 'package:ott_frontend/core/theme/ocean_theme.dart';
 import 'package:ott_frontend/features/downloads/controllers/download_controller.dart';
 import 'package:ott_frontend/features/home/controllers/home_controller.dart';
@@ -23,25 +24,47 @@ class StreamEaseApp extends StatelessWidget {
       providers: <SingleChildWidget>[
         Provider<AppDependencies>.value(value: deps),
         ChangeNotifierProvider<HomeController>(
-          create: (_) => HomeController(
-            repository: deps.contentRepository,
-          )..loadHomeFeed(),
+          create: (_) {
+            final HomeController c = HomeController(repository: deps.contentRepository);
+            if (!TestConfig.disableAutoStart) {
+              c.loadHomeFeed();
+            }
+            return c;
+          },
         ),
         ChangeNotifierProvider<AppSearchController>(
-          create: (_) => AppSearchController(
-            repository: deps.contentRepository,
-            cache: deps.simpleCache,
-            db: deps.appDatabase,
-          )..loadRecent(),
+          create: (_) {
+            final AppSearchController c = AppSearchController(
+              repository: deps.contentRepository,
+              cache: deps.simpleCache,
+              db: deps.appDatabase,
+            );
+            if (!TestConfig.disableAutoStart) {
+              c.loadRecent();
+            }
+            return c;
+          },
         ),
         ChangeNotifierProvider<DownloadController>(
-          create: (_) => DownloadController(
-            db: deps.appDatabase,
-            engine: deps.downloadEngine,
-          )..restoreFromDisk(),
+          create: (_) {
+            final DownloadController c = DownloadController(
+              db: deps.appDatabase,
+              engine: deps.downloadEngine,
+            );
+            if (!TestConfig.disableAutoStart) {
+              c.restoreFromDisk();
+            }
+            return c;
+          },
         ),
         ChangeNotifierProvider<SettingsController>(
-          create: (_) => SettingsController(cache: deps.simpleCache)..load(),
+          create: (_) {
+            final SettingsController c = SettingsController(cache: deps.simpleCache);
+            if (!TestConfig.disableAutoStart) {
+              c.load();
+            }
+            return c;
+          },
         ),
       ],
       child: MaterialApp(

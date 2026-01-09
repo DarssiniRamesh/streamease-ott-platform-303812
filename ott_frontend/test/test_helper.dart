@@ -43,6 +43,7 @@ Future<void> pumpAndSettleBounded(
   Duration timeout = const Duration(seconds: 2),
   Duration step = const Duration(milliseconds: 20),
   int fallbackFrames = 5,
+  bool assertNoScheduledFrames = false,
 }) async {
   /// Pumps frames until the framework becomes idle, but with a strict upper bound.
   ///
@@ -54,6 +55,9 @@ Future<void> pumpAndSettleBounded(
   /// - Pump `step` repeatedly until `hasScheduledFrame` becomes false.
   /// - Stop after `timeout` regardless.
   /// - Pump a few extra fixed frames as a best-effort flush for microtasks.
+  ///
+  /// If [assertNoScheduledFrames] is true, this will assert that the framework is
+  /// idle after the bounded loop + fallback frames.
   final Stopwatch sw = Stopwatch()..start();
 
   // Ensure at least one pump so initial microtasks/layout happen.
@@ -66,10 +70,14 @@ Future<void> pumpAndSettleBounded(
   // Always do a small deterministic drain to help flush late microtasks.
   await pumpFrames(tester, count: fallbackFrames, step: step);
 
-  // If still scheduling frames, do not hang; just return and let the test assert.
-  //
-  // Note: Avoid `print` here because the repo lints enforce `avoid_print` even
-  // for tests via the shared linter script.
+  if (assertNoScheduledFrames) {
+    expect(
+      tester.binding.hasScheduledFrame,
+      isFalse,
+      reason: 'Framework still has scheduled frames after bounded settle. '
+          'This usually means a timer/animation/stream is still running.',
+    );
+  }
 }
 
 /// PUBLIC_INTERFACE
@@ -80,7 +88,11 @@ Future<void> unmountWidgetTree(WidgetTester tester) async {
   /// - Controllers/listeners are often disposed by Provider during unmount
   /// - Disposing can cancel timers/streams that otherwise keep the isolate alive
   await tester.pumpWidget(const SizedBox());
-  await pumpAndSettleBounded(tester, timeout: const Duration(seconds: 1));
+  await pumpAndSettleBounded(
+    tester,
+    timeout: const Duration(seconds: 1),
+    assertNoScheduledFrames: true,
+  );
 }
 
 /// PUBLIC_INTERFACE

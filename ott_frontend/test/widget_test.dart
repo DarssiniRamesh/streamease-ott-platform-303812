@@ -10,6 +10,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() {
+    // Must be initialized before any SharedPreferences.getInstance() calls, including
+    // any potential indirect calls during bootstrap in future refactors.
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+
     // Must occur before any AppDatabase.open calls (AppBootstrap.bootstrap opens SQLite).
     initSqfliteFfiForTests();
   });
@@ -24,20 +28,27 @@ void main() {
   });
 
   testWidgets('App boots and shows bottom navigation', (WidgetTester tester) async {
+    // Minimal diagnostics: if something starts a ticker/timer and keeps frames
+    // scheduled, fail fast here instead of hanging later.
+    expect(
+      tester.binding.hasScheduledFrame,
+      isFalse,
+      reason: 'Test started with a scheduled frame (unexpected).',
+    );
+
+    // MUST happen after setMockInitialValues; bootstrap calls SharedPreferences.getInstance().
     final AppDependencies deps = await AppBootstrap.bootstrap();
 
     addTearDown(() async {
-      // Reset test config first (so later tests start clean).
+      // Order matters:
+      // 1) unmount the widget tree so Providers dispose controllers/tickers/listeners
+      // 2) dispose app dependencies (DB, timers)
+      // 3) reset global test config
+      await unmountWidgetTree(tester);
+      await disposeAppDependencies(deps);
       TestConfig.reset();
 
-      // Dispose widget tree first so providers/controllers cancel debounces/listeners.
-      // This includes a final unmount to a const SizedBox() + bounded settle.
-      await unmountWidgetTree(tester);
-
-      // Then close DB / cancel any download timers.
-      await disposeAppDependencies(deps);
-
-      // Fail fast if anything continues scheduling frames after teardown.
+      // Final fail-fast: verify nothing is still scheduling frames.
       await assertNoScheduledFramesAfterPumps(
         tester,
         reason: 'Widget tree teardown left scheduled frames behind.',
@@ -46,22 +57,18 @@ void main() {
 
     await tester.pumpWidget(StreamEaseApp(deps: deps));
 
-    // Fail fast if any unexpected background work starts scheduling frames
-    // continuously (prevents silent hangs).
-    await pumpUntilNoScheduledFrames(
+    // Make progress deterministic: pump bounded until the expected navigation labels appear.
+    // Avoid any unbounded settle.
+    await pumpUntilFound(tester, find.text('Home'), timeout: const Duration(seconds: 2));
+
+    // Extra bounded drain to catch any stray scheduled frames started by constructors.
+    await pumpAndSettleBounded(
       tester,
       timeout: const Duration(seconds: 1),
-      reason: 'App did not go idle after initial build; background work may be running.',
+      assertNoScheduledFrames: true,
     );
 
-    // Do NOT assert global idleness beyond bounded: implicit animations (ink reactions,
-    // focus highlights, etc.) can keep scheduling frames and make tests flaky/hang.
-    // Instead, pump bounded and wait until the expected UI is present.
-    // There can be multiple 'Home' texts on screen (e.g., label + header).
-    // We only need to assert the bottom navigation is present.
-    await pumpUntilFound(tester, find.text('Home'));
     expect(find.text('Home'), findsWidgets);
-
     expect(find.text('Search'), findsWidgets);
     expect(find.text('Downloads'), findsWidgets);
     expect(find.text('Profile'), findsWidgets);

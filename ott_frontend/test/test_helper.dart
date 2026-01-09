@@ -82,7 +82,9 @@ Future<void> pumpAndSettleBounded(
   // Ensure at least one pump so initial microtasks/layout happen.
   await tester.pump(step);
 
+  int pumps = 0;
   while (tester.binding.hasScheduledFrame && sw.elapsed < timeout) {
+    pumps++;
     await tester.pump(step);
   }
 
@@ -94,7 +96,8 @@ Future<void> pumpAndSettleBounded(
       tester.binding.hasScheduledFrame,
       isFalse,
       reason: 'Framework still has scheduled frames after bounded settle. '
-          'This usually means a timer/animation/stream is still running.',
+          'Pumped $pumps times over ${sw.elapsedMilliseconds}ms. '
+          'This usually means a Timer/animation/stream is still running.',
     );
   }
 }

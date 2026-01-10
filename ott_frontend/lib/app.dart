@@ -8,6 +8,7 @@ import 'package:ott_frontend/core/services/test_config.dart';
 import 'package:ott_frontend/core/theme/ocean_theme.dart';
 import 'package:ott_frontend/features/downloads/controllers/download_controller.dart';
 import 'package:ott_frontend/features/home/controllers/home_controller.dart';
+import 'package:ott_frontend/features/player/controllers/mini_player_controller.dart';
 import 'package:ott_frontend/features/profile/controllers/settings_controller.dart';
 import 'package:ott_frontend/features/search/controllers/search_controller.dart';
 import 'package:provider/provider.dart';
@@ -23,6 +24,12 @@ class StreamEaseApp extends StatelessWidget {
     return MultiProvider(
       providers: <SingleChildWidget>[
         Provider<AppDependencies>.value(value: deps),
+
+        // Global player UI state for the persistent mini-player.
+        ChangeNotifierProvider<MiniPlayerController>(
+          create: (_) => MiniPlayerController(),
+        ),
+
         ChangeNotifierProvider<HomeController>(
           create: (_) {
             final HomeController c = HomeController(repository: deps.contentRepository);

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ott_frontend/core/i18n/app_localizations.dart';
 import 'package:ott_frontend/core/routing/app_routes.dart';
 import 'package:ott_frontend/core/routing/app_router.dart';
-import 'package:ott_frontend/data/models/content_models.dart';
+
 import 'package:ott_frontend/features/search/controllers/search_controller.dart';
 import 'package:ott_frontend/widgets/content_list_tile.dart';
 import 'package:ott_frontend/widgets/reveal_on_build.dart';

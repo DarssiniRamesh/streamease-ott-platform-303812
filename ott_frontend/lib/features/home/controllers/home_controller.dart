@@ -22,7 +22,12 @@ class HomeController extends ChangeNotifier {
       if (_disposed) return;
 
       // No await here; keep callback sync-safe.
-      refreshFromCache();
+      // Debounce to avoid repeated refreshes causing rebuild jank.
+      _cacheRefreshDebounce?.cancel();
+      _cacheRefreshDebounce = Timer(const Duration(milliseconds: 250), () {
+        if (_disposed) return;
+        refreshFromCache();
+      });
     };
     repository.cacheBuster.addListener(_cacheListener!);
   }
@@ -35,6 +40,11 @@ class HomeController extends ChangeNotifier {
   VoidCallback? _cacheListener;
 
   bool _disposed = false;
+
+  // Debounce SWR cache-buster events; repositories can emit multiple updates
+  // during background refresh. Coalescing prevents rapid UI rebuild storms
+  // that can manifest as list/hero "glitches" while scrolling.
+  Timer? _cacheRefreshDebounce;
 
   HomeLoadState _state = HomeLoadState.loading;
   HomeLoadState get state => _state;
@@ -190,6 +200,9 @@ class HomeController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+
+    _cacheRefreshDebounce?.cancel();
+    _cacheRefreshDebounce = null;
 
     final VoidCallback? l = _cacheListener;
     if (l != null) {

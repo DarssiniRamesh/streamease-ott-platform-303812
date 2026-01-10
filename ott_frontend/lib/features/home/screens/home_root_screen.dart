@@ -115,6 +115,7 @@ class HomeRootScreen extends StatelessWidget {
                                 button: true,
                                 label: item.content.title,
                                 child: ContentCard(
+                                  key: ValueKey<String>('cw-${item.content.id}'),
                                   title: item.content.title,
                                   heroTag: 'content-poster-${item.content.id}',
                                   subtitle: 'Resume • ${_formatPosition(item.positionSeconds)}',
@@ -152,6 +153,7 @@ class HomeRootScreen extends StatelessWidget {
                             button: true,
                             label: item.title,
                             child: ContentCard(
+                              key: ValueKey<String>('rail-${rail.title}-${item.id}'),
                               title: item.title,
                               heroTag: 'content-poster-${item.id}',
                               subtitle: item.genres.isEmpty ? null : item.genres.first,

@@ -8,7 +8,9 @@ plugins {
 android {
     namespace = "com.example.ott_frontend"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // Pin NDK version to avoid mismatch with installed/required NDK in CI/build environment.
+    // This value is taken from the provided build logs.
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

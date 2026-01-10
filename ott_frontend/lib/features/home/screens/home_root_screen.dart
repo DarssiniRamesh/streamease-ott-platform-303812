@@ -116,6 +116,7 @@ class HomeRootScreen extends StatelessWidget {
                                 label: item.content.title,
                                 child: ContentCard(
                                   title: item.content.title,
+                                  heroTag: 'content-poster-${item.content.id}',
                                   subtitle: 'Resume • ${_formatPosition(item.positionSeconds)}',
                                   onTap: () {
                                     Navigator.of(context).pushNamed(
@@ -152,6 +153,7 @@ class HomeRootScreen extends StatelessWidget {
                             label: item.title,
                             child: ContentCard(
                               title: item.title,
+                              heroTag: 'content-poster-${item.id}',
                               subtitle: item.genres.isEmpty ? null : item.genres.first,
                               onTap: () {
                                 Navigator.of(context).pushNamed(

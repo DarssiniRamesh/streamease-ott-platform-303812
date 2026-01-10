@@ -50,30 +50,58 @@ class _AppShellState extends State<AppShell> {
     final AppLocalizations t = AppLocalizations.of(context);
 
     return Scaffold(
-      body: IndexedStack(
-        index: _index,
-        children: <Widget>[
-          _buildTabNavigator(
-            navigatorKey: _navigatorKeys[0],
-            initialRoute: AppRoutes.home,
-            root: const HomeRootScreen(),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeOutCubic,
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          final bool reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+          final Animation<double> fade = CurvedAnimation(
+            parent: animation,
+            curve: const Interval(0.12, 1.0, curve: Curves.easeOutCubic),
+          );
+
+          Widget w = FadeTransition(opacity: fade, child: child);
+
+          if (!reduce) {
+            w = ScaleTransition(
+              scale: Tween<double>(begin: 1.01, end: 1.0).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              ),
+              child: w,
+            );
+          }
+          return w;
+        },
+        child: KeyedSubtree(
+          key: ValueKey<int>(_index),
+          child: IndexedStack(
+            index: _index,
+            children: <Widget>[
+              _buildTabNavigator(
+                navigatorKey: _navigatorKeys[0],
+                initialRoute: AppRoutes.home,
+                root: const HomeRootScreen(),
+              ),
+              _buildTabNavigator(
+                navigatorKey: _navigatorKeys[1],
+                initialRoute: AppRoutes.search,
+                root: const SearchRootScreen(),
+              ),
+              _buildTabNavigator(
+                navigatorKey: _navigatorKeys[2],
+                initialRoute: AppRoutes.downloads,
+                root: const DownloadsRootScreen(),
+              ),
+              _buildTabNavigator(
+                navigatorKey: _navigatorKeys[3],
+                initialRoute: AppRoutes.profile,
+                root: const ProfileRootScreen(),
+              ),
+            ],
           ),
-          _buildTabNavigator(
-            navigatorKey: _navigatorKeys[1],
-            initialRoute: AppRoutes.search,
-            root: const SearchRootScreen(),
-          ),
-          _buildTabNavigator(
-            navigatorKey: _navigatorKeys[2],
-            initialRoute: AppRoutes.downloads,
-            root: const DownloadsRootScreen(),
-          ),
-          _buildTabNavigator(
-            navigatorKey: _navigatorKeys[3],
-            initialRoute: AppRoutes.profile,
-            root: const ProfileRootScreen(),
-          ),
-        ],
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,

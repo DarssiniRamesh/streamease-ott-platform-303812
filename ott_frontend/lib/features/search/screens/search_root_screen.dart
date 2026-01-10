@@ -5,6 +5,7 @@ import 'package:ott_frontend/core/routing/app_router.dart';
 import 'package:ott_frontend/data/models/content_models.dart';
 import 'package:ott_frontend/features/search/controllers/search_controller.dart';
 import 'package:ott_frontend/widgets/content_list_tile.dart';
+import 'package:ott_frontend/widgets/reveal_on_build.dart';
 import 'package:provider/provider.dart';
 
 class SearchRootScreen extends StatelessWidget {
@@ -125,16 +126,20 @@ class SearchRootScreen extends StatelessWidget {
                     child: Text('No results found.'),
                   ),
 
-                for (final ContentItem item in c.results)
-                  ContentListTile(
-                    title: item.title,
-                    subtitle: item.description,
-                    onTap: () {
-                      Navigator.of(context).pushNamed(
-                        AppRoutes.contentDetails,
-                        arguments: ContentDetailsArgs(contentId: item.id),
-                      );
-                    },
+                for (int i = 0; i < c.results.length; i++)
+                  RevealOnBuild(
+                    index: i,
+                    child: ContentListTile(
+                      title: c.results[i].title,
+                      subtitle: c.results[i].description,
+                      heroTag: 'content-poster-${c.results[i].id}',
+                      onTap: () {
+                        Navigator.of(context).pushNamed(
+                          AppRoutes.contentDetails,
+                          arguments: ContentDetailsArgs(contentId: c.results[i].id),
+                        );
+                      },
+                    ),
                   ),
               ],
             );

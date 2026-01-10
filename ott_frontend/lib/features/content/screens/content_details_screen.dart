@@ -3,8 +3,10 @@ import 'package:ott_frontend/core/i18n/app_localizations.dart';
 import 'package:ott_frontend/core/services/app_bootstrap.dart';
 import 'package:ott_frontend/core/services/test_config.dart';
 import 'package:ott_frontend/features/content/controllers/content_details_controller.dart';
+import 'package:ott_frontend/features/content/widgets/details_reveal.dart';
 import 'package:ott_frontend/features/downloads/controllers/download_controller.dart';
 import 'package:ott_frontend/features/home/controllers/home_controller.dart';
+import 'package:ott_frontend/widgets/animated_banner.dart';
 import 'package:provider/provider.dart';
 
 class ContentDetailsScreen extends StatelessWidget {
@@ -46,8 +48,11 @@ class ContentDetailsScreen extends StatelessWidget {
                   ? (c.downloadStatus == 'completed' ? 'Downloaded' : 'In Downloads')
                   : t.enqueueDownload);
 
+          final String title = c.item?.title ?? 'Content';
+          final String heroTag = 'content-poster-$contentId';
+
           return Scaffold(
-            appBar: AppBar(title: Text(c.item?.title ?? 'Content')),
+            appBar: AppBar(title: Text(title)),
             body: SafeArea(
               child: switch (c.state) {
                 ContentDetailsState.loading => const Center(child: CircularProgressIndicator()),
@@ -57,108 +62,128 @@ class ContentDetailsScreen extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                     children: <Widget>[
                       if (c.refreshing) const LinearProgressIndicator(minHeight: 3),
-                      if ((c.errorMessage?.isNotEmpty ?? false) && c.item != null)
-                        Padding(
+                      AnimatedBanner(
+                        visible: (c.errorMessage?.isNotEmpty ?? false) && c.item != null,
+                        child: Padding(
                           padding: const EdgeInsets.only(bottom: 12, top: 12),
                           child: Material(
                             color: Theme.of(context).colorScheme.secondary.withAlpha(25),
                             borderRadius: BorderRadius.circular(12),
                             child: Padding(
                               padding: const EdgeInsets.all(12),
-                              child: Text(c.errorMessage!),
+                              child: Text(c.errorMessage ?? ''),
                             ),
                           ),
                         ),
-                      _PosterPlaceholder(title: c.item!.title),
+                      ),
+                      DetailsReveal(
+                        order: 0,
+                        child: _PosterPlaceholder(title: c.item!.title, heroTag: heroTag),
+                      ),
                       const SizedBox(height: 12),
-                      Text(
-                        c.item!.title,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                      DetailsReveal(
+                        order: 1,
+                        child: Text(
+                          c.item!.title,
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
                       ),
                       const SizedBox(height: 8),
-                      Text(c.item!.description),
+                      DetailsReveal(order: 2, child: Text(c.item!.description)),
                       if ((c.lastWatchedSeconds ?? 0) > 0) ...<Widget>[
                         const SizedBox(height: 10),
-                        _LastWatchedPill(seconds: c.lastWatchedSeconds!),
+                        DetailsReveal(order: 3, child: _LastWatchedPill(seconds: c.lastWatchedSeconds!)),
                       ],
                       const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: c.item!.genres.map((String g) => Chip(label: Text(g))).toList(),
+                      DetailsReveal(
+                        order: 4,
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: c.item!.genres.map((String g) => Chip(label: Text(g))).toList(),
+                        ),
                       ),
                       const SizedBox(height: 16),
 
                       // Primary actions row
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: () {
-                                // Capture everything that touches BuildContext BEFORE any async work.
-                                final HomeController home = context.read<HomeController>();
-                                final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+                      DetailsReveal(
+                        order: 5,
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: () {
+                                  // Capture everything that touches BuildContext BEFORE any async work.
+                                  final HomeController home = context.read<HomeController>();
+                                  final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
 
-                                // Async work does NOT use BuildContext after awaits.
-                                () async {
-                                  await c.playPressed(); // write-through to AppDatabase via repository
-                                  await home.onPlaybackProgressPersisted(); // refresh Continue Watching
-                                }();
+                                  // Async work does NOT use BuildContext after awaits.
+                                  () async {
+                                    await c.playPressed(); // write-through to AppDatabase via repository
+                                    await home.onPlaybackProgressPersisted(); // refresh Continue Watching
+                                  }();
 
-                                // Show immediate UI feedback synchronously.
-                                messenger.showSnackBar(
-                                  const SnackBar(content: Text('Playback not implemented yet.')),
-                                );
-                              },
-                              icon: const Icon(Icons.play_arrow),
-                              label: Text((c.lastWatchedSeconds ?? 0) > 0 ? 'Resume' : 'Play'),
+                                  // Show immediate UI feedback synchronously.
+                                  messenger.showSnackBar(
+                                    const SnackBar(content: Text('Playback not implemented yet.')),
+                                  );
+                                },
+                                icon: const Icon(Icons.play_arrow),
+                                label: Text((c.lastWatchedSeconds ?? 0) > 0 ? 'Resume' : 'Play'),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: !isReady
-                                  ? null
-                                  : (c.hasDownload
-                                      ? () {
-                                          // Navigate user to Downloads tab (shell); keep it simple with hint.
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('Open the Downloads tab to manage.')),
-                                          );
-                                        }
-                                      : () {
-                                          context.read<DownloadController>().enqueue(
-                                                contentId: c.item!.id,
-                                                title: c.item!.title,
-                                              );
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: !isReady
+                                    ? null
+                                    : (c.hasDownload
+                                        ? () {
+                                            // Navigate user to Downloads tab (shell); keep it simple with hint.
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Open the Downloads tab to manage.')),
+                                            );
+                                          }
+                                        : () {
+                                            context.read<DownloadController>().enqueue(
+                                                  contentId: c.item!.id,
+                                                  title: c.item!.title,
+                                                );
 
-                                          // Update local state immediately for UI reflect.
-                                          c.markDownloadEnqueuedLocally();
+                                            // Update local state immediately for UI reflect.
+                                            c.markDownloadEnqueuedLocally();
 
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('Added to downloads.')),
-                                          );
-                                        }),
-                              icon: Icon(c.hasDownload ? Icons.download_done : Icons.download),
-                              label: Text(downloadLabel),
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Added to downloads.')),
+                                            );
+                                          }),
+                                icon: Icon(c.hasDownload ? Icons.download_done : Icons.download),
+                                label: Text(downloadLabel),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
 
                       const SizedBox(height: 12),
 
                       // Secondary actions
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: c.toggleWatchlist,
-                              icon: Icon(c.inWatchlist ? Icons.check : Icons.add),
-                              label: Text(c.inWatchlist ? 'In Watchlist' : 'Add to Watchlist'),
+                      DetailsReveal(
+                        order: 6,
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: c.toggleWatchlist,
+                                icon: Icon(c.inWatchlist ? Icons.check : Icons.add),
+                                label: Text(c.inWatchlist ? 'In Watchlist' : 'Add to Watchlist'),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -208,31 +233,35 @@ class _LastWatchedPill extends StatelessWidget {
 }
 
 class _PosterPlaceholder extends StatelessWidget {
-  const _PosterPlaceholder({required this.title});
+  const _PosterPlaceholder({required this.title, required this.heroTag});
 
   final String title;
+  final String heroTag;
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 16 / 9,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: <Color>[
-              Theme.of(context).colorScheme.primary.withAlpha(35),
-              Theme.of(context).colorScheme.surface,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+    return Hero(
+      tag: heroTag,
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: <Color>[
+                Theme.of(context).colorScheme.primary.withAlpha(35),
+                Theme.of(context).colorScheme.surface,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
-        ),
-        child: Center(
-          child: Text(
-            title,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          child: Center(
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
           ),
         ),
       ),

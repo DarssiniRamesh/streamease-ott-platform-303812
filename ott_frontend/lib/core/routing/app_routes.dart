@@ -5,5 +5,6 @@ class AppRoutes {
   static const String profile = '/profile';
 
   static const String contentDetails = '/content';
+  static const String player = '/player';
   static const String settings = '/settings';
 }

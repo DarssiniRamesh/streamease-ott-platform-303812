@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ott_frontend/core/i18n/app_localizations.dart';
+import 'package:ott_frontend/core/routing/app_routes.dart';
+import 'package:ott_frontend/core/routing/app_router.dart';
 import 'package:ott_frontend/core/services/app_bootstrap.dart';
 import 'package:ott_frontend/core/services/test_config.dart';
 import 'package:ott_frontend/features/content/controllers/content_details_controller.dart';
@@ -116,19 +118,22 @@ class ContentDetailsScreen extends StatelessWidget {
                             Expanded(
                               child: FilledButton.icon(
                                 onPressed: () {
-                                  // Capture everything that touches BuildContext BEFORE any async work.
+                                  // Navigate to a dedicated Player screen to complete the playback flow.
+                                  // Also do a best-effort progress write-through (sync kick-off only)
+                                  // to keep Continue Watching durable.
                                   final HomeController home = context.read<HomeController>();
-                                  final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
 
-                                  // Async work does NOT use BuildContext after awaits.
                                   () async {
-                                    await c.playPressed(); // write-through to AppDatabase via repository
-                                    await home.onPlaybackProgressPersisted(); // refresh Continue Watching
+                                    await c.playPressed(); // write-through to repository/DB
+                                    await home.onPlaybackProgressPersisted();
                                   }();
 
-                                  // Show immediate UI feedback synchronously.
-                                  messenger.showSnackBar(
-                                    const SnackBar(content: Text('Playback not implemented yet.')),
+                                  Navigator.of(context).pushNamed(
+                                    AppRoutes.player,
+                                    arguments: PlayerArgs(
+                                      contentId: c.item!.id,
+                                      startPositionSeconds: c.lastWatchedSeconds,
+                                    ),
                                   );
                                 },
                                 icon: const Icon(Icons.play_arrow),

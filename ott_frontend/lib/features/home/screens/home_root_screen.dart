@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:ott_frontend/core/i18n/app_localizations.dart';
 import 'package:ott_frontend/core/routing/app_routes.dart';
 import 'package:ott_frontend/core/routing/app_router.dart';
@@ -57,121 +58,149 @@ class HomeRootScreen extends StatelessWidget {
             // Continue watching is driven by watch_history; show a placeholder if empty.
             final List<ContinueWatchingItem> cw = c.continueWatching;
 
-            return RefreshIndicator(
-              onRefresh: c.loadHomeFeed,
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 24),
-                children: <Widget>[
-                  if (c.refreshing) const LinearProgressIndicator(minHeight: 3),
-                  if ((c.errorMessage?.isNotEmpty ?? false) && c.payload != null)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: Material(
-                        color: Theme.of(context).colorScheme.secondary.withAlpha(25),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(
-                            c.errorMessage!,
-                            style: Theme.of(context).textTheme.bodyMedium,
+            // While the user is actively scrolling, we suppress:
+            // - pull-to-refresh (RefreshIndicator) to avoid gesture competition
+            // - cache-buster driven refresh storms (in controller) via a scroll flag
+            //
+            // This prevents subtle vertical list "drift"/re-layout that users perceive as
+            // the list moving on its own.
+            return NotificationListener<UserScrollNotification>(
+              onNotification: (UserScrollNotification n) {
+                final bool scrolling = n.direction != ScrollDirection.idle;
+                c.setUserInteracting(scrolling);
+                return false;
+              },
+              child: Builder(
+                builder: (BuildContext context) {
+                  final bool disableRefreshWhileScrolling = c.userInteracting;
+
+                  final Widget list = ListView(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    children: <Widget>[
+                      if (c.refreshing) const LinearProgressIndicator(minHeight: 3),
+                      if ((c.errorMessage?.isNotEmpty ?? false) && c.payload != null)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                          child: Material(
+                            color: Theme.of(context).colorScheme.secondary.withAlpha(25),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                c.errorMessage!,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
 
-                  // Continue Watching rail (watch-history based).
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
+                      // Continue Watching rail (watch-history based).
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                t.continueWatching,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            if (c.continueWatchingLoading)
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        height: 190,
+                        child: cw.isEmpty
+                            ? const _ContinueWatchingEmpty()
+                            : ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                itemBuilder: (BuildContext context, int index) {
+                                  final ContinueWatchingItem item = cw[index];
+                                  return Semantics(
+                                    button: true,
+                                    label: item.content.title,
+                                    child: ContentCard(
+                                      key: ValueKey<String>('cw-${item.content.id}'),
+                                      title: item.content.title,
+                                      heroTag: 'content-poster-${item.content.id}',
+                                      subtitle: 'Resume • ${_formatPosition(item.positionSeconds)}',
+                                      onTap: () {
+                                        Navigator.of(context).pushNamed(
+                                          AppRoutes.contentDetails,
+                                          arguments: ContentDetailsArgs(contentId: item.content.id),
+                                        );
+                                      },
+                                    ),
+                                  );
+                                },
+                                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                                itemCount: cw.length,
+                              ),
+                      ),
+
+                      // Remote rails (cache-first via SWR).
+                      for (final ContentRail rail in rails) ...<Widget>[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
                           child: Text(
-                            t.continueWatching,
+                            rail.title,
                             style: Theme.of(context)
                                 .textTheme
                                 .titleMedium
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),
-                        if (c.continueWatchingLoading)
-                          const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                    height: 190,
-                    child: cw.isEmpty
-                        ? const _ContinueWatchingEmpty()
-                        : ListView.separated(
+                        SizedBox(
+                          height: 190,
+                          child: ListView.separated(
                             scrollDirection: Axis.horizontal,
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             itemBuilder: (BuildContext context, int index) {
-                              final ContinueWatchingItem item = cw[index];
+                              final ContentItem item = rail.items[index];
                               return Semantics(
                                 button: true,
-                                label: item.content.title,
+                                label: item.title,
                                 child: ContentCard(
-                                  key: ValueKey<String>('cw-${item.content.id}'),
-                                  title: item.content.title,
-                                  heroTag: 'content-poster-${item.content.id}',
-                                  subtitle: 'Resume • ${_formatPosition(item.positionSeconds)}',
+                                  key: ValueKey<String>('rail-${rail.title}-${item.id}'),
+                                  title: item.title,
+                                  heroTag: 'content-poster-${item.id}',
+                                  subtitle: item.genres.isEmpty ? null : item.genres.first,
                                   onTap: () {
                                     Navigator.of(context).pushNamed(
                                       AppRoutes.contentDetails,
-                                      arguments: ContentDetailsArgs(contentId: item.content.id),
+                                      arguments: ContentDetailsArgs(contentId: item.id),
                                     );
                                   },
                                 ),
                               );
                             },
                             separatorBuilder: (_, __) => const SizedBox(width: 12),
-                            itemCount: cw.length,
+                            itemCount: rail.items.length,
                           ),
-                  ),
+                        ),
+                      ],
+                    ],
+                  );
 
-                  // Remote rails (cache-first via SWR).
-                  for (final ContentRail rail in rails) ...<Widget>[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
-                      child: Text(
-                        rail.title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    SizedBox(
-                      height: 190,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemBuilder: (BuildContext context, int index) {
-                          final ContentItem item = rail.items[index];
-                          return Semantics(
-                            button: true,
-                            label: item.title,
-                            child: ContentCard(
-                              key: ValueKey<String>('rail-${rail.title}-${item.id}'),
-                              title: item.title,
-                              heroTag: 'content-poster-${item.id}',
-                              subtitle: item.genres.isEmpty ? null : item.genres.first,
-                              onTap: () {
-                                Navigator.of(context).pushNamed(
-                                  AppRoutes.contentDetails,
-                                  arguments: ContentDetailsArgs(contentId: item.id),
-                                );
-                              },
-                            ),
-                          );
-                        },
-                        separatorBuilder: (_, __) => const SizedBox(width: 12),
-                        itemCount: rail.items.length,
-                      ),
-                    ),
-                  ],
-                ],
+                  if (disableRefreshWhileScrolling) {
+                    return list;
+                  }
+
+                  return RefreshIndicator(
+                    onRefresh: c.loadHomeFeed,
+                    child: list,
+                  );
+                },
               ),
             );
           },

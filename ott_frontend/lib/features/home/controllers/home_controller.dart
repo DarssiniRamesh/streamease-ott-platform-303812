@@ -21,11 +21,22 @@ class HomeController extends ChangeNotifier {
       // Guard against late cache-buster events after disposal.
       if (_disposed) return;
 
+      // If the user is actively scrolling, do not trigger refresh-driven rebuilds.
+      // We'll defer the refresh until interaction ends (see setUserInteracting()).
+      if (_userInteracting) {
+        _deferredCacheRefresh = true;
+        return;
+      }
+
       // No await here; keep callback sync-safe.
       // Debounce to avoid repeated refreshes causing rebuild jank.
       _cacheRefreshDebounce?.cancel();
       _cacheRefreshDebounce = Timer(const Duration(milliseconds: 250), () {
         if (_disposed) return;
+        if (_userInteracting) {
+          _deferredCacheRefresh = true;
+          return;
+        }
         refreshFromCache();
       });
     };
@@ -45,6 +56,12 @@ class HomeController extends ChangeNotifier {
   // during background refresh. Coalescing prevents rapid UI rebuild storms
   // that can manifest as list/hero "glitches" while scrolling.
   Timer? _cacheRefreshDebounce;
+
+  // User interaction gate (set by the Home screen via scroll notifications).
+  bool _userInteracting = false;
+  bool get userInteracting => _userInteracting;
+
+  bool _deferredCacheRefresh = false;
 
   HomeLoadState _state = HomeLoadState.loading;
   HomeLoadState get state => _state;
@@ -176,6 +193,33 @@ class HomeController extends ChangeNotifier {
   Future<void> onPlaybackProgressPersisted() async {
     if (_disposed) return;
     await loadContinueWatching();
+  }
+
+  // PUBLIC_INTERFACE
+  void setUserInteracting(bool value) {
+    /// Updates whether the user is actively interacting with the home feed scroll.
+    ///
+    /// When `true`, cache-buster triggered refreshes are deferred to avoid list
+    /// position/rebuild "drift" during scrolling. When it flips back to `false`,
+    /// any deferred refresh is performed (debounced).
+    if (_disposed) return;
+    if (_userInteracting == value) return;
+
+    _userInteracting = value;
+
+    if (!_userInteracting && _deferredCacheRefresh) {
+      _deferredCacheRefresh = false;
+
+      _cacheRefreshDebounce?.cancel();
+      _cacheRefreshDebounce = Timer(const Duration(milliseconds: 120), () {
+        if (_disposed) return;
+        if (_userInteracting) {
+          _deferredCacheRefresh = true;
+          return;
+        }
+        refreshFromCache();
+      });
+    }
   }
 
   // PUBLIC_INTERFACE
